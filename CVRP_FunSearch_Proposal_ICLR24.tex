@@ -1,0 +1,52 @@
+\documentclass{article}
+\usepackage{iclr2024_conference,times}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{microtype}
+
+\makeatletter
+\renewcommand\section{\@startsection {section}{1}{\z@}{-2.0ex plus
+    -0.5ex minus -.2ex}{1.2ex plus 0.2ex
+minus0.2ex}{\large\bfseries\raggedright}}
+\makeatother
+
+\setlist[itemize]{leftmargin=*,itemsep=0.15em,topsep=0.2em}
+\setlist[enumerate]{leftmargin=*,itemsep=0.25em,topsep=0.2em}
+
+\title{\textnormal{Project Proposal:\\[0.2em] Sample-Efficient FunSearch for CVRP}}
+\author{QIN YUANCHENG (59061061) \and QIN ZIHENG (59866035) \and LAI YIKAI (59563061)}
+
+\iclrfinalcopy
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+\pagestyle{empty}
+\vspace{-1.5em}
+
+\section*{Group Members}
+\noindent Student Name: QIN YUANCHENG \hfill Student Id: 59061061\\
+\noindent Student Name: QIN ZIHENG \hfill Student Id: 59866035\\
+\noindent Student Name: LAI YIKAI \hfill Student Id: 59563061
+
+\section*{Which topic and why}
+We propose to adapt FunSearch---an LLM-driven program search method for automatic heuristic design---to the Capacitated Vehicle Routing Problem (CVRP), with a focus on sample-efficient evaluation. CVRP is a classical combinatorial optimization problem with widely-used benchmarks (e.g., CVRPLib, Uchoa instances). Improving FunSearch's sample efficiency reduces computational cost and enables broader application to routing problems.
+
+We choose ``sample-efficient FunSearch for CVRP'' because CVRP offers rich, well-studied benchmarks and practical relevance. The project builds on FunSearch while contributing a concrete efficiency improvement (duplicate-detection and smarter sampling) that has both theoretical and empirical value.
+
+\section*{Tentative Plan}
+\begin{enumerate}
+    \item Implement a FunSearch pipeline for CVRP: template heuristic wrapper + LLM interface for program generation/variation.
+    \item Design a lightweight duplicate/functional-similarity detector to avoid re-evaluating functionally equivalent programs.
+    \item Develop sampling and evaluation strategies (adaptive sampling, early stopping) to reduce sandbox runs.
+    \item Integrate baseline solvers (OR-Tools, LKH/HGS) for comparison and run controlled experiments on benchmark instances.
+\end{enumerate}
+
+\section*{Evaluation Plan}
+\begin{itemize}
+    \item \textbf{Datasets:} CVRPLib (Uchoa sets A,B,E,F,M,P recommended).
+    \item \textbf{Metrics:} total route distance, number of vehicles, runtime, and gap to best-known solutions.
+    \item \textbf{Baselines:} Google OR-Tools, LKH (via pylkh), and HGS if available.
+    \item \textbf{Experiments:} compare average performance vs. baselines, measure reduction in sandbox evaluations, and ablation tests for duplicate-detection and sampling strategies.
+\end{itemize}
+
+\end{document}

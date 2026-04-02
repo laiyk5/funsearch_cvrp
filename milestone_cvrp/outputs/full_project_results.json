@@ -1,0 +1,346 @@
+{
+  "project": "Full CVRP FunSearch Project",
+  "dataset_type": "synthetic",
+  "dataset_names": [
+    "SYN-01-N20",
+    "SYN-02-N24",
+    "SYN-03-N28",
+    "SYN-04-N32",
+    "SYN-05-N36"
+  ],
+  "instance_count": 5,
+  "search_config": {
+    "seed": 2026,
+    "init_population": 12,
+    "iterations": 60,
+    "top_k": 6,
+    "mutation_std": 0.28,
+    "early_stage_instances": 2
+  },
+  "funsearch": {
+    "best_weights": [
+      0.197,
+      0.3153,
+      -0.1856
+    ],
+    "best_score_from_search": 1062.839,
+    "unique_candidates": 72
+  },
+  "methods": [
+    {
+      "name": "Nearest Neighbor",
+      "avg_distance": 985.844,
+      "avg_num_routes": 6.6,
+      "score": 1117.844,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 837.838,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 733.386,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 984.915,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 1109.23,
+          "num_routes": 7
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 1263.852,
+          "num_routes": 9
+        }
+      ]
+    },
+    {
+      "name": "Nearest Neighbor + 2-opt",
+      "avg_distance": 962.622,
+      "avg_num_routes": 6.6,
+      "score": 1094.622,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 796.363,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 700.87,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 972.396,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 1087.816,
+          "num_routes": 7
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 1255.668,
+          "num_routes": 9
+        }
+      ]
+    },
+    {
+      "name": "Clarke-Wright Savings",
+      "avg_distance": 755.839,
+      "avg_num_routes": 6.8,
+      "score": 891.839,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 651.404,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 641.671,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 703.567,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 820.433,
+          "num_routes": 8
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 962.119,
+          "num_routes": 9
+        }
+      ]
+    },
+    {
+      "name": "Clarke-Wright Savings + 2-opt",
+      "avg_distance": 755.306,
+      "avg_num_routes": 6.8,
+      "score": 891.306,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 651.404,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 641.671,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 700.904,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 820.433,
+          "num_routes": 8
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 962.119,
+          "num_routes": 9
+        }
+      ]
+    },
+    {
+      "name": "Weighted Greedy (fixed)",
+      "avg_distance": 1077.837,
+      "avg_num_routes": 6.6,
+      "score": 1209.837,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 833.618,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 821.854,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 1096.459,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 1170.579,
+          "num_routes": 7
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 1466.678,
+          "num_routes": 9
+        }
+      ]
+    },
+    {
+      "name": "Sample-Efficient FunSearch",
+      "avg_distance": 930.839,
+      "avg_num_routes": 6.6,
+      "score": 1062.839,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 764.802,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 795.987,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 892.848,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 982.781,
+          "num_routes": 7
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 1217.777,
+          "num_routes": 9
+        }
+      ]
+    },
+    {
+      "name": "Sample-Efficient FunSearch + 2-opt",
+      "avg_distance": 923.539,
+      "avg_num_routes": 6.6,
+      "score": 1055.539,
+      "details": [
+        {
+          "instance": "SYN-01-N20",
+          "distance": 764.802,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-02-N24",
+          "distance": 795.987,
+          "num_routes": 5
+        },
+        {
+          "instance": "SYN-03-N28",
+          "distance": 890.613,
+          "num_routes": 6
+        },
+        {
+          "instance": "SYN-04-N32",
+          "distance": 962.429,
+          "num_routes": 7
+        },
+        {
+          "instance": "SYN-05-N36",
+          "distance": 1203.864,
+          "num_routes": 9
+        }
+      ]
+    }
+  ],
+  "ranking": [
+    {
+      "rank": 1,
+      "name": "Clarke-Wright Savings + 2-opt",
+      "avg_distance": 755.306,
+      "avg_num_routes": 6.8,
+      "score": 891.306
+    },
+    {
+      "rank": 2,
+      "name": "Clarke-Wright Savings",
+      "avg_distance": 755.839,
+      "avg_num_routes": 6.8,
+      "score": 891.839
+    },
+    {
+      "rank": 3,
+      "name": "Sample-Efficient FunSearch + 2-opt",
+      "avg_distance": 923.539,
+      "avg_num_routes": 6.6,
+      "score": 1055.539
+    },
+    {
+      "rank": 4,
+      "name": "Sample-Efficient FunSearch",
+      "avg_distance": 930.839,
+      "avg_num_routes": 6.6,
+      "score": 1062.839
+    },
+    {
+      "rank": 5,
+      "name": "Nearest Neighbor + 2-opt",
+      "avg_distance": 962.622,
+      "avg_num_routes": 6.6,
+      "score": 1094.622
+    },
+    {
+      "rank": 6,
+      "name": "Nearest Neighbor",
+      "avg_distance": 985.844,
+      "avg_num_routes": 6.6,
+      "score": 1117.844
+    },
+    {
+      "rank": 7,
+      "name": "Weighted Greedy (fixed)",
+      "avg_distance": 1077.837,
+      "avg_num_routes": 6.6,
+      "score": 1209.837
+    }
+  ],
+  "best_method": {
+    "name": "Clarke-Wright Savings + 2-opt",
+    "avg_distance": 755.306,
+    "avg_num_routes": 6.8,
+    "score": 891.306,
+    "details": [
+      {
+        "instance": "SYN-01-N20",
+        "distance": 651.404,
+        "num_routes": 6
+      },
+      {
+        "instance": "SYN-02-N24",
+        "distance": 641.671,
+        "num_routes": 5
+      },
+      {
+        "instance": "SYN-03-N28",
+        "distance": 700.904,
+        "num_routes": 6
+      },
+      {
+        "instance": "SYN-04-N32",
+        "distance": 820.433,
+        "num_routes": 8
+      },
+      {
+        "instance": "SYN-05-N36",
+        "distance": 962.119,
+        "num_routes": 9
+      }
+    ]
+  }
+}
