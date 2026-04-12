@@ -202,7 +202,7 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
                 
                 print(f"使用 {service_name} API (模型: {model})")
                 
-                # 调用API
+                # 调用API（带超时）
                 response = client.chat.completions.create(
                     model=model,
                     messages=[
@@ -210,7 +210,8 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=self.temperature,
-                    max_tokens=self.max_tokens
+                    max_tokens=self.max_tokens,
+                    timeout=60  # 60秒超时
                 )
                 
                 # 提取生成的代码

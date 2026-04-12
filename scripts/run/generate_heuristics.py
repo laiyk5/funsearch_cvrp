@@ -249,12 +249,14 @@ def load_a_folder_data() -> Tuple[List[CVRPInstance], List[CVRPInstance], List[C
     
     return small_instances, medium_instances, large_instances, optimal_solutions
 
-def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = None) -> List[Dict]:
+def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = None, 
+                         parallel: bool = True) -> List[Dict]:
     """运行迭代搜索过程
     
     Args:
         n_iterations: 迭代次数
         n_heuristics_per_iter: 每轮生成的启发式算法数量
+        parallel: 是否并行生成（默认True，小批量测试可设为False）
         
     Returns:
         每轮最佳启发式算法的结果列表
@@ -456,19 +458,40 @@ def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = 
             print(f"第{i+1}个启发式算法测试完成，平均分数: {avg_score:.3f}, 平均差距: {avg_gap:.2f}%")
             return result
         
-        # 使用线程池并行处理，降低并行度
-        max_workers = min(5, current_n_heuristics)  # 限制最大线程数为5，避免超过API速率限制
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # 提交所有任务
-            futures = [executor.submit(process_heuristic, i) for i in range(current_n_heuristics)]
-            # 收集结果
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result:
-                    # 检查功能等价性
-                    if result["signature"] not in evaluated_signatures:
-                        evaluated_signatures.add(result["signature"])
-                        current_results.append(result)
+        # 使用线程池并行处理，或单线程模式（小批量测试用）
+        if parallel and current_n_heuristics > 1:
+            max_workers = min(3, current_n_heuristics)  # 限制最大线程数为3，避免API阻塞
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有任务
+                futures = [executor.submit(process_heuristic, i) for i in range(current_n_heuristics)]
+                # 收集结果（带超时，防止卡住）
+                for future in concurrent.futures.as_completed(futures, timeout=300):  # 5分钟超时
+                    try:
+                        result = future.result(timeout=60)  # 每个任务1分钟超时
+                        if result:
+                            # 检查功能等价性
+                            if result["signature"] not in evaluated_signatures:
+                                evaluated_signatures.add(result["signature"])
+                                current_results.append(result)
+                    except concurrent.futures.TimeoutError:
+                        print("  任务超时，跳过")
+                        continue
+                    except Exception as e:
+                        print(f"  任务异常: {e}")
+                        continue
+        else:
+            # 单线程模式（更稳定，适合小批量测试）
+            print("  使用单线程模式...")
+            for i in range(current_n_heuristics):
+                try:
+                    result = process_heuristic(i)
+                    if result:
+                        if result["signature"] not in evaluated_signatures:
+                            evaluated_signatures.add(result["signature"])
+                            current_results.append(result)
+                except Exception as e:
+                    print(f"  处理第{i+1}个算法时出错: {e}")
+                    continue
         
         # 选择当前轮得分最高的算法
         if current_results:
