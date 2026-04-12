@@ -170,12 +170,38 @@ Edit `src/utils/config.py` to adjust:
 
 ## Output Files
 
-Results are saved to `outputs/`:
-- `milestone_results.json` / `search_history.json`
-- `full_project_results.json` / `full_search_history.json`
-- `iterative_search_results.json`
+### JSON Results (`outputs/`)
 
-Reports are generated in the root directory:
+| File | Description |
+|------|-------------|
+| `milestone_results.json` / `search_history.json` | Milestone experiment results |
+| `full_project_results.json` / `full_search_history.json` | Full benchmark results |
+| `iterative_search_results.json` | LLM-generated heuristics with code |
+| `test_a_data_results.json` | A-dataset test results |
+
+**Note**: Generated Python code is stored inside these JSON files under the `heuristic_code` field.
+
+### Extract Generated Code
+
+To extract generated heuristic algorithms as individual `.py` files:
+
+```bash
+python scripts/extract_generated_codes.py
+
+# Or specify custom output directory
+python scripts/extract_generated_codes.py --output-dir my_codes/
+```
+
+This will create:
+```
+generated_codes/
+├── heuristic_iter00_score1552.24.py
+├── heuristic_iter01_score1437.54.py
+└── heuristic_iter02_score1206.22.py
+```
+
+### Reports
+
 - `milestone_report.md`
 - `final_project_report.md`
 
