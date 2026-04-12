@@ -5,7 +5,6 @@ from pathlib import Path
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from funsearch_cvrp.cvrp.core import evaluate_heuristic, generate_synthetic_benchmarks, nearest_neighbor_heuristic, weighted_greedy_heuristic
 from funsearch_cvrp.cvrp.search import SearchConfig, run_sample_efficient_search

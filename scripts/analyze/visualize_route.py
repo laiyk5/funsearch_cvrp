@@ -42,7 +42,6 @@ from typing import Callable
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from funsearch_cvrp.cvrp.core import (
     CVRPInstance,

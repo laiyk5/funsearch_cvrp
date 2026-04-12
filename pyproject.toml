@@ -18,8 +18,9 @@ dev = [
     "sphinx-rtd-theme>=2.0.0",
 ]
 
-[tool.setuptools]
-packages = ["funsearch_cvrp"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["funsearch_cvrp*"]
 
 [tool.uv]
 python-preference = "only-managed"

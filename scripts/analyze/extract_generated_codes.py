@@ -20,7 +20,6 @@ from pathlib import Path
 from datetime import datetime
 
 # Add project root to Python path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 def get_default_output_dir(input_file: Path) -> Path:

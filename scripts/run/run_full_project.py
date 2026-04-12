@@ -7,7 +7,6 @@ from typing import Callable
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from funsearch_cvrp.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
 from funsearch_cvrp.cvrp.core import CVRPInstance, evaluate_heuristic, generate_synthetic_benchmarks, nearest_neighbor_heuristic, weighted_greedy_heuristic
