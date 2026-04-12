@@ -32,17 +32,27 @@ _load_env_file()
 
 # Support both DashScope (Alibaba) and OpenAI
 DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", DASHSCOPE_API_KEY)
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
-# If using DashScope, use it as the OpenAI API key (OpenAI-compatible API)
-if DASHSCOPE_API_KEY and not os.environ.get("OPENAI_API_KEY"):
+# Determine which API to use
+USE_OPENAI = bool(OPENAI_API_KEY)
+USE_DASHSCOPE = bool(DASHSCOPE_API_KEY) and not USE_OPENAI
+
+# If only DashScope is set, use it as fallback
+if not OPENAI_API_KEY and DASHSCOPE_API_KEY:
     OPENAI_API_KEY = DASHSCOPE_API_KEY
 
 # =============================================================================
 # LLM MODEL CONFIGURATION
 # =============================================================================
 
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "qwen3-max-2025-09-23")
+# Default model based on which API is being used
+if USE_OPENAI:
+    _default_model = "gpt-4"  # OpenAI default
+else:
+    _default_model = "qwen3-max-2025-09-23"  # Alibaba default
+
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", _default_model)
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2000"))
 

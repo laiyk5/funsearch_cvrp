@@ -183,23 +183,28 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
         max_retries = 3
         retry_delay = 5  # 初始重试延迟
         
+        # 导入配置
+        from src.utils import config
+        
         for attempt in range(max_retries):
             try:
-                # 使用阿里通义千问大模型
-                import sys
-                from pathlib import Path
-                
-                # 添加项目根目录到Python路径
-                sys.path.insert(0, str(Path(__file__).parent.parent))
-                
-                from src.utils.models import get_normal_client, ALI_TONGYI_TURBO_MODEL
-                
-                # 创建阿里通义千问大模型客户端
-                client = get_normal_client()
+                # 根据配置选择 API
+                if config.USE_OPENAI:
+                    # 使用 OpenAI API
+                    from openai import OpenAI
+                    client = OpenAI(api_key=config.OPENAI_API_KEY)
+                    model = config.OPENAI_MODEL
+                    print(f"使用 OpenAI API (模型: {model})")
+                else:
+                    # 使用阿里云通义千问 (默认)
+                    from src.utils.models import get_normal_client, ALI_TONGYI_TURBO_MODEL
+                    client = get_normal_client()
+                    model = ALI_TONGYI_TURBO_MODEL
+                    print(f"使用阿里云通义千问 API (模型: {model})")
                 
                 # 调用API
                 response = client.chat.completions.create(
-                    model=ALI_TONGYI_TURBO_MODEL,
+                    model=model,
                     messages=[
                         {"role": "system", "content": "你是一个CVRP启发式算法专家"},
                         {"role": "user", "content": prompt}
@@ -218,7 +223,7 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
                     generated_code = generated_code[:-3]
                 
                 # 添加延迟，避免速率限制
-                time.sleep(2)  # 2秒延迟
+                time.sleep(config.API_CALL_DELAY)
                 
                 return generated_code
             except Exception as e:

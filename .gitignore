@@ -47,3 +47,18 @@ final_project_report*.md
 # Archives
 *.7z
 *.zip
+
+# User configuration
+
+.env
+
+# Latex build files
+
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+*.fdb_latexmk
+*.fls
