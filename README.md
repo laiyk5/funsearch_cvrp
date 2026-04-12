@@ -170,29 +170,51 @@ Edit `src/utils/config.py` to adjust:
 
 ## Output Files
 
-### JSON Results (`outputs/`)
+Results are organized by **git commit** to avoid overwriting previous runs:
 
-| File | Description |
-|------|-------------|
-| `milestone_results.json` / `search_history.json` | Milestone experiment results |
-| `full_project_results.json` / `full_search_history.json` | Full benchmark results |
-| `iterative_search_results.json` | LLM-generated heuristics with code |
-| `test_a_data_results.json` | A-dataset test results |
+```
+outputs/
+├── latest                    -> symlink to latest run
+├── latest_commit             -> symlink to latest commit directory
+├── {commit_hash}/
+│   ├── {timestamp}/
+│   │   ├── iterative_search_results.json
+│   │   ├── run_info.json
+│   │   └── ...
+│   └── {timestamp}/
+└── {commit_hash}/
+    └── ...
+```
 
-**Note**: Generated Python code is stored inside these JSON files under the `heuristic_code` field.
+### View Results
+
+```bash
+# List all results
+python scripts/list_results.py
+
+# Output:
+# Commit: 7d9a1d6
+#   ✓ 20250412_153033
+# Symlinks:
+#   latest -> 7d9a1d6/20250412_153033
+```
 
 ### Extract Generated Code
 
-To extract generated heuristic algorithms as individual `.py` files:
+Generated Python code is stored in JSON files. To extract as `.py` files:
 
 ```bash
+# Extract from latest result
 python scripts/extract_generated_codes.py
 
-# Or specify custom output directory
-python scripts/extract_generated_codes.py --output-dir my_codes/
+# Extract from specific commit
+python scripts/extract_generated_codes.py --commit 7d9a1d6
+
+# Extract specific file
+python scripts/extract_generated_codes.py --input outputs/latest/iterative_search_results.json
 ```
 
-This will create:
+This creates:
 ```
 generated_codes/
 ├── heuristic_iter00_score1552.24.py
@@ -200,10 +222,13 @@ generated_codes/
 └── heuristic_iter02_score1206.22.py
 ```
 
-### Reports
+### JSON File Structure
 
-- `milestone_report.md`
-- `final_project_report.md`
+| File | Description |
+|------|-------------|
+| `*_results.json` | Experiment results with generated code |
+| `run_info.json` | Metadata (timestamp, git commit, config) |
+| `search_history.json` | Detailed search history |
 
 ## Team Members
 
