@@ -5,6 +5,7 @@ FunSearch CVRP 开发者文档
    :maxdepth: 2
    :caption: 目录:
 
+   cvrp
    data
 
 简介
