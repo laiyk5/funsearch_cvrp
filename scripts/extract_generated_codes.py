@@ -3,13 +3,20 @@
 提取生成的启发式算法代码到独立的 .py 文件
 
 用法:
+    # 提取最新结果
     python scripts/extract_generated_codes.py
-    python scripts/extract_generated_codes.py --output-dir generated_codes/
+    
+    # 提取指定结果文件
+    python scripts/extract_generated_codes.py --input outputs/latest/iterative_search_results.json
+    
+    # 提取指定 commit 的所有结果
+    python scripts/extract_generated_codes.py --commit abc123
 """
 
 import argparse
 import json
 from pathlib import Path
+from datetime import datetime
 
 
 def extract_codes(input_file: Path, output_dir: Path):
@@ -17,7 +24,7 @@ def extract_codes(input_file: Path, output_dir: Path):
     
     if not input_file.exists():
         print(f"错误: 文件不存在 {input_file}")
-        return
+        return 0
     
     # 读取结果
     with open(input_file) as f:
@@ -29,7 +36,7 @@ def extract_codes(input_file: Path, output_dir: Path):
     # 过滤有效结果
     valid_results = [r for r in results if r and r.get('heuristic_code')]
     
-    print(f"从 {input_file.name} 中提取 {len(valid_results)} 个算法...")
+    print(f"从 {input_file} 中提取 {len(valid_results)} 个算法...")
     
     for result in valid_results:
         iteration = result.get('iteration', 0)
@@ -44,42 +51,99 @@ def extract_codes(input_file: Path, output_dir: Path):
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(f'"""\n')
             f.write(f'FunSearch 生成的启发式算法\n')
-            f.write(f'来源: {input_file.name}\n')
+            f.write(f'来源: {input_file}\n')
             f.write(f'迭代: {iteration}\n')
             f.write(f'评分: {score}\n')
+            f.write(f'提取时间: {datetime.now().isoformat()}\n')
             f.write(f'"""\n\n')
             f.write(code)
         
         print(f"  ✓ 保存: {filename}")
     
     print(f"\n共提取 {len(valid_results)} 个算法到 {output_dir}/")
+    return len(valid_results)
+
+
+def find_results_files(commit_hash: str = None, base_dir: str = "outputs") -> list:
+    """查找所有结果文件"""
+    base_path = Path(base_dir)
+    
+    if commit_hash:
+        # 查找指定 commit 的所有结果
+        commit_dir = base_path / commit_hash
+        if not commit_dir.exists():
+            print(f"错误: Commit {commit_hash} 没有结果")
+            return []
+        result_files = list(commit_dir.rglob("*.json"))
+    else:
+        # 查找所有结果文件
+        result_files = list(base_path.rglob("*.json"))
+    
+    # 过滤掉 run_info.json
+    result_files = [f for f in result_files if f.name != "run_info.json"]
+    
+    return result_files
 
 
 def main():
     parser = argparse.ArgumentParser(description='提取生成的启发式算法代码')
     parser.add_argument('--input', '-i', type=Path, 
-                        default=Path('outputs/iterative_search_results.json'),
                         help='输入的 JSON 结果文件')
+    parser.add_argument('--commit', '-c', type=str,
+                        help='指定 commit hash 提取该 commit 的所有结果')
     parser.add_argument('--output-dir', '-o', type=Path,
                         default=Path('generated_codes'),
                         help='输出目录')
+    parser.add_argument('--list', '-l', action='store_true',
+                        help='列出所有可用的结果')
     args = parser.parse_args()
     
-    extract_codes(args.input, args.output_dir)
+    # 列出所有结果
+    if args.list:
+        from src.utils.output_manager import print_results_summary
+        print_results_summary("outputs")
+        return
     
-    # 同时检查其他结果文件
-    other_files = [
-        Path('outputs/test_a_data_results.json'),
-        Path('outputs/milestone_results.json'),
-    ]
+    # 指定了输入文件
+    if args.input:
+        out_dir = args.output_dir / args.input.stem
+        extract_codes(args.input, out_dir)
+        return
     
-    for f in other_files:
-        if f.exists() and f != args.input:
-            print(f"\n发现其他结果文件: {f}")
-            ans = input("是否也提取? (y/n): ").strip().lower()
-            if ans == 'y':
-                out_dir = args.output_dir / f.stem
+    # 指定了 commit
+    if args.commit:
+        result_files = find_results_files(args.commit)
+        if not result_files:
+            return
+        
+        print(f"找到 {len(result_files)} 个结果文件 for commit {args.commit}")
+        for f in result_files:
+            out_dir = args.output_dir / args.commit / f.parent.name
+            extract_codes(f, out_dir)
+        return
+    
+    # 默认：提取最新结果
+    latest = Path("outputs/latest")
+    if latest.exists() and latest.is_symlink():
+        result_files = list(latest.glob("*.json"))
+        result_files = [f for f in result_files if f.name != "run_info.json"]
+        
+        if result_files:
+            for f in result_files:
+                out_dir = args.output_dir / "latest"
                 extract_codes(f, out_dir)
+        else:
+            # 回退到旧版本兼容模式
+            old_file = Path("outputs/iterative_search_results.json")
+            if old_file.exists():
+                print("使用旧版本结果文件...")
+                extract_codes(old_file, args.output_dir)
+            else:
+                print("错误: 没有找到结果文件")
+                print("请先运行实验或指定 --input")
+    else:
+        print("错误: 没有找到最新结果")
+        print("提示: 使用 --list 查看所有可用的结果")
 
 
 if __name__ == "__main__":

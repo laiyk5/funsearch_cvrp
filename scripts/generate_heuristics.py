@@ -496,23 +496,35 @@ def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = 
 
 def main() -> None:
     """主函数"""
+    # 导入输出管理器
+    from src.utils.output_manager import get_output_dir, save_run_info
+    
     # 运行迭代搜索，设置为2轮迭代，每轮生成20个算法
     best_results = run_iterative_search(n_iterations=2, n_heuristics_per_iter=20)
     
-    # 保存结果
-    out_dir = Path("outputs")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # 保存结果到按 commit 组织的目录
+    out_dir = get_output_dir("outputs")
+    print(f"\n保存结果到: {out_dir}")
     
     # 保存每轮最佳结果
-    (out_dir / "iterative_search_results.json").write_text(
+    results_file = out_dir / "iterative_search_results.json"
+    results_file.write_text(
         json.dumps(best_results, indent=2, ensure_ascii=False),
         encoding="utf-8"
     )
     
+    # 保存运行信息
+    save_run_info(out_dir, {
+        "script": "generate_heuristics.py",
+        "n_iterations": 2,
+        "n_heuristics_per_iter": 20,
+        "n_valid_results": len([r for r in best_results if r is not None])
+    })
+    
     # 过滤掉None结果
     valid_results = [r for r in best_results if r is not None]
     
-    print(f"\n结果已保存到outputs目录")
+    print(f"结果已保存到: {results_file}")
     print(f"共进行了{len(valid_results)}轮有效迭代")
     
     # 打印每轮最佳算法信息

@@ -13,7 +13,7 @@ from src.utils.config import (
     EARLY_PRUNING_THRESHOLD,
     LARGE_SCALE_THRESHOLD,
 )
-from src.utils.models import get_normal_client, Model
+from src.utils.models import get_normal_client
 
 __all__ = [
     "OPENAI_API_KEY",
@@ -28,5 +28,4 @@ __all__ = [
     "EARLY_PRUNING_THRESHOLD",
     "LARGE_SCALE_THRESHOLD",
     "get_normal_client",
-    "Model",
 ]

@@ -23,7 +23,6 @@ DEEPSEEK_CHAT_MODEL = "deepseek-chat"
 DEEPSEEK_REASONER_MODEL = "deepseek-reasoner"
 
 # 腾讯混元
-'''
 #   官网：https://hunyuan.cloud.tencent.com/#/app/modelSquare
 TENCENT_HUNYUAN_API_KEY_OS_VAR_NAME = "HUNYUAN_API_KEY"
 TENCENT_HUNYUAN_URL = "https://api.hunyuan.cloud.tencent.com/v1"
@@ -33,7 +32,6 @@ TENCENT_HUNYUAN_LONGCONTEXT_MODEL = "hunyuan-large-longcontext"
 # TENCENT_HUNYUAN_EMBEDDING = "hunyuan-embedding"
 # TENCENT_SECRET_ID_OS_VAR_NAME = "Tencent_SecretId"
 # TENCENT_SECRET_KEY_OS_VAR_NAME = "Tencent_SecretKey"
-'''
 
 
 import os
