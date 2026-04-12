@@ -1,0 +1,77 @@
+[
+  {
+    "id": 2,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "distance_std": 800.2489435332488,
+      "routes_std": 8.0,
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "id": 3,
+    "signature": "bdb5425f0d29b168450fb5693c58929b8371a44cae480bb1946ada73cb919f72",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    # K-means聚类\n    customers = list(range(1, instance.n_customers + 1))\n    n_clusters = max(1, instance.n_customers // 10)  # 简单估计聚类数\n    \n    # 初始化聚类中心\n    import random\n    random.seed(42)  # 固定种子以确保可重复性\n    centers = [instance.coords[c] for c in random.sample(customers, n_clusters)]\n    \n    # 计算距离\n    def distance(a, b):\n        dx = a[0] - b[0]\n        dy = a[1] - b[1]\n        return (dx * dx + dy * dy) ** 0.5\n    \n    # 迭代聚类\n    for _ in range(10):  # 固定迭代次数\n        clusters = [[] for _ in range(n_clusters)]\n        for c in customers:\n            distances = [distance(instance.coords[c], center) for center in centers]\n            nearest = distances.index(min(distances))\n            clusters[nearest].append(c)\n        \n        # 更新聚类中心\n        new_centers = []\n        for cluster in clusters:\n            if cluster:\n                x = sum(instance.coords[c][0] for c in cluster) / len(cluster)\n                y = sum(instance.coords[c][1] for c in cluster) / len(cluster)\n                new_centers.append((x, y))\n            else:\n                new_centers.append(centers[0])  # 避免空聚类\n        \n        centers = new_centers\n    \n    # 对每个聚类使用最近邻算法\n    routes = []\n    for cluster in clusters:\n        if not cluster:\n            continue\n        \n        unserved = set(cluster)\n        while unserved:\n            cap_left = instance.capacity\n            current = 0\n            route = []\n            \n            while True:\n                feasible = [c for c in unserved if instance.demands[c] <= cap_left]\n                if not feasible:\n                    break\n                \n                nxt = min(feasible, key=lambda c: distance(instance.coords[current], instance.coords[c]))\n                route.append(nxt)\n                unserved.remove(nxt)\n                cap_left -= instance.demands[nxt]\n                current = nxt\n            \n            routes.append(route)\n    \n    return routes\n        ",
+    "small_scale": {
+      "avg_distance": 743.7769818670362,
+      "avg_num_routes": 6.0,
+      "score": 863.7769818670362
+    },
+    "medium_scale": {
+      "avg_distance": 1657.5144439581495,
+      "avg_num_routes": 15.0,
+      "score": 1957.5144439581495
+    },
+    "large_scale": {
+      "avg_distance": 2725.0154860204793,
+      "avg_num_routes": 28.0,
+      "score": 3285.0154860204793
+    },
+    "stability": {
+      "distance_std": 990.6192520767215,
+      "routes_std": 11.0,
+      "avg_score": 2035.4356372818884
+    }
+  },
+  {
+    "id": 5,
+    "signature": "06a617927b13e4828daf0d3ea25117a0f2ab700043e6860abf4cfc8455c4afb0",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    unserved = set(range(1, instance.n_customers + 1))\n    routes = []\n    \n    while unserved:\n        cap_left = instance.capacity\n        current = 0\n        route = []\n        \n        while True:\n            feasible = [c for c in unserved if instance.demands[c] <= cap_left]\n            if not feasible:\n                break\n            \n            # 考虑距离和需求的加权\n            def score(c):\n                dx = instance.coords[current][0] - instance.coords[c][0]\n                dy = instance.coords[current][1] - instance.coords[c][1]\n                dist = (dx * dx + dy * dy) ** 0.5\n                demand_ratio = instance.demands[c] / instance.capacity\n                return dist - 0.1 * demand_ratio\n            \n            nxt = min(feasible, key=score)\n            route.append(nxt)\n            unserved.remove(nxt)\n            cap_left -= instance.demands[nxt]\n            current = nxt\n        \n        routes.append(route)\n    \n    return routes\n        ",
+    "small_scale": {
+      "avg_distance": 837.8381669520786,
+      "avg_num_routes": 6.0,
+      "score": 957.8381669520786
+    },
+    "medium_scale": {
+      "avg_distance": 1700.3105942787272,
+      "avg_num_routes": 13.0,
+      "score": 1960.3105942787272
+    },
+    "large_scale": {
+      "avg_distance": 3008.962230438237,
+      "avg_num_routes": 22.0,
+      "score": 3448.962230438237
+    },
+    "stability": {
+      "distance_std": 1085.5620317430792,
+      "routes_std": 8.0,
+      "avg_score": 2122.370330556347
+    }
+  }
+]

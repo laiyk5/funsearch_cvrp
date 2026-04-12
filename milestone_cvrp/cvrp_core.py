@@ -117,11 +117,15 @@ def evaluate_heuristic(instances: list[CVRPInstance], solver: Callable[[CVRPInst
     }
 
 
-def generate_synthetic_benchmarks(seed: int = 2026) -> list[CVRPInstance]:
+def generate_synthetic_benchmarks(seed: int = 2026, sizes: list[int] = None) -> list[CVRPInstance]:
     rng = random.Random(seed)
     instances: list[CVRPInstance] = []
 
-    for idx, n in enumerate([20, 24, 28, 32, 36], start=1):
+    # 默认生成20、50、100客户的数据集
+    if sizes is None:
+        sizes = [20, 50, 100]
+
+    for idx, n in enumerate(sizes, start=1):
         coords = [(50.0, 50.0)]
         demands = [0]
         for _ in range(n):

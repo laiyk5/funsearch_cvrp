@@ -1,0 +1,266 @@
+[
+  {
+    "iteration": 0,
+    "id": 0,
+    "signature": "06a617927b13e4828daf0d3ea25117a0f2ab700043e6860abf4cfc8455c4afb0",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    unserved = set(range(1, instance.n_customers + 1))\n    routes = []\n    \n    while unserved:\n        cap_left = instance.capacity\n        current = 0\n        route = []\n        \n        while True:\n            feasible = [c for c in unserved if instance.demands[c] <= cap_left]\n            if not feasible:\n                break\n            \n            # 考虑距离和需求的加权\n            def score(c):\n                dx = instance.coords[current][0] - instance.coords[c][0]\n                dy = instance.coords[current][1] - instance.coords[c][1]\n                dist = (dx * dx + dy * dy) ** 0.5\n                demand_ratio = instance.demands[c] / instance.capacity\n                return dist - 0.16 * demand_ratio\n            \n            nxt = min(feasible, key=score)\n            route.append(nxt)\n            unserved.remove(nxt)\n            cap_left -= instance.demands[nxt]\n            current = nxt\n        \n        routes.append(route)\n    \n    return routes\n        ",
+    "small_scale": {
+      "avg_distance": 837.8381669520786,
+      "avg_num_routes": 6.0,
+      "score": 957.8381669520786
+    },
+    "medium_scale": {
+      "avg_distance": 1700.3105942787272,
+      "avg_num_routes": 13.0,
+      "score": 1960.3105942787272
+    },
+    "large_scale": {
+      "avg_distance": 3008.962230438237,
+      "avg_num_routes": 22.0,
+      "score": 3448.962230438237
+    },
+    "stability": {
+      "avg_score": 2122.370330556347
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  },
+  {
+    "iteration": 1,
+    "id": 4,
+    "signature": "36cf18a5c102ee1b52fd0bda3199166ffcff005acb18720156a167e98cbc85fb",
+    "heuristic_code": "\ndef custom_heuristic(instance):\n    depot = 0\n    n = instance.n_customers\n    \n    # 初始化为单客户路径\n    routes = {i: [i] for i in range(1, n + 1)}\n    route_of = {i: i for i in range(1, n + 1)}\n    route_demand = {i: instance.demands[i] for i in range(1, n + 1)}\n    \n    # 计算节约值\n    savings = []\n    for i in range(1, n + 1):\n        for j in range(i + 1, n + 1):\n            # 计算距离\n            def distance(a, b):\n                dx = instance.coords[a][0] - instance.coords[b][0]\n                dy = instance.coords[a][1] - instance.coords[b][1]\n                return (dx * dx + dy * dy) ** 0.5\n            \n            s = distance(i, depot) + distance(depot, j) - distance(i, j)\n            savings.append((-s, i, j))  # 负值用于排序\n    \n    savings.sort()\n    \n    for _, i, j in savings:\n        ri = route_of.get(i)\n        rj = route_of.get(j)\n        if ri is None or rj is None or ri == rj:\n            continue\n        \n        if route_demand[ri] + route_demand[rj] > instance.capacity:\n            continue\n        \n        # 合并路径\n        routes[ri].extend(routes[rj])\n        route_demand[ri] += route_demand[rj]\n        \n        for c in routes[rj]:\n            route_of[c] = ri\n        \n        del routes[rj]\n        del route_demand[rj]\n    \n    return list(routes.values())\n        ",
+    "small_scale": {
+      "avg_distance": 700.4400558184093,
+      "avg_num_routes": 6.0,
+      "score": 820.4400558184093
+    },
+    "medium_scale": {
+      "avg_distance": 1368.4780704478478,
+      "avg_num_routes": 13.0,
+      "score": 1628.4780704478478
+    },
+    "large_scale": {
+      "avg_distance": 2300.937942884907,
+      "avg_num_routes": 22.0,
+      "score": 2740.937942884907
+    },
+    "stability": {
+      "avg_score": 1729.9520230503879
+    }
+  }
+]
