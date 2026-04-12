@@ -43,7 +43,10 @@ Sample-Efficient FunSearch implementation for solving the Capacitated Vehicle Ro
 │   ├── proposal/             # Proposal documents
 │   │   ├── CVRP_FunSearch_Proposal.docx
 │   │   └── CVRP_FunSearch_Proposal_ICLR24.tex
-│   └── report/               # LaTeX report files
+│   └── report/               # LaTeX conference paper files
+│       ├── iclr2024_conference.tex
+│       ├── iclr2024_conference.pdf
+│       └── ...
 ├── outputs/                  # Generated results (JSON, logs)
 └── README.md                 # This file
 ```
