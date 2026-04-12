@@ -47,6 +47,9 @@ outputs/*.txt
 milestone_report*.md
 final_project_report*.md
 
+# Generated heuristic codes (can be extracted from outputs/)
+generated_codes/
+
 # Archives
 *.7z
 *.zip
