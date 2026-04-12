@@ -191,20 +191,16 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
                 # 使用 openai 包调用 API (支持 OpenAI 和阿里云 DashScope)
                 from openai import OpenAI
                 
-                if not config.API_KEY:
-                    raise ValueError("未配置 API Key。请设置 OPENAI_API_KEY 或 DASHSCOPE_API_KEY 环境变量，或创建 .env 文件。")
+                # 根据模型名获取对应的 API 配置
+                api_key, base_url, service_name = config.get_api_config()
                 
                 client = OpenAI(
-                    api_key=config.API_KEY,
-                    base_url=config.API_BASE_URL
+                    api_key=api_key,
+                    base_url=base_url
                 )
                 model = config.OPENAI_MODEL
                 
-                # 显示使用的服务
-                if config.OPENAI_API_KEY:
-                    print(f"使用 OpenAI API (模型: {model})")
-                else:
-                    print(f"使用阿里云 DashScope API (模型: {model})")
+                print(f"使用 {service_name} API (模型: {model})")
                 
                 # 调用API
                 response = client.chat.completions.create(

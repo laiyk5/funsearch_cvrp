@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""测试LLM调用（支持 OpenAI 和阿里云 DashScope）"""
+"""测试LLM调用（支持 OpenAI 和阿里云 DashScope）
+
+API 选择基于模型名称自动判断：
+- gpt-* 模型 → OpenAI API
+- qwen-* 模型 → 阿里云 DashScope API
+"""
 
 import sys
 from pathlib import Path
@@ -13,24 +18,17 @@ from src.utils import config
 def test_llm():
     """测试LLM调用，输出helloworld"""
     try:
-        # 检查 API Key
-        if not config.API_KEY:
-            print("错误: 未配置 API Key")
-            print("请设置 OPENAI_API_KEY 或 DASHSCOPE_API_KEY 环境变量")
-            print("或创建 .env 文件 (参考 .env.example)")
-            return
+        # 根据模型名获取 API 配置
+        api_key, base_url, service_name = config.get_api_config()
+        
+        print(f"使用 {service_name} API")
+        print(f"模型: {config.OPENAI_MODEL}")
         
         # 创建客户端 (openai 包支持 OpenAI 和 DashScope)
         client = OpenAI(
-            api_key=config.API_KEY,
-            base_url=config.API_BASE_URL
+            api_key=api_key,
+            base_url=base_url
         )
-        
-        # 显示使用的服务
-        if config.OPENAI_API_KEY:
-            print(f"使用 OpenAI API (模型: {config.OPENAI_MODEL})")
-        else:
-            print(f"使用阿里云 DashScope API (模型: {config.OPENAI_MODEL})")
         
         # 构建提示
         prompt = "请输出'helloworld'，不要输出任何其他内容"
@@ -58,6 +56,12 @@ def test_llm():
         else:
             print(f"测试完成，但输出与预期不同: {generated_content}")
         
+    except ValueError as e:
+        print(f"配置错误: {e}")
+        print("\n请检查环境变量:")
+        print("  - 使用 OpenAI (gpt-4等): 设置 OPENAI_API_KEY")
+        print("  - 使用阿里云 (qwen等): 设置 DASHSCOPE_API_KEY")
+        print("\n或创建 .env 文件 (参考 .env.example)")
     except Exception as e:
         print(f"LLM调用失败: {e}")
         print("测试失败！")
