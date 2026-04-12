@@ -186,22 +186,26 @@ def load_a_folder_data() -> Tuple[List[CVRPInstance], List[CVRPInstance], List[C
     Returns:
         小规模、中等规模、大规模实例列表，以及最优解字典
     """
-    # 尝试不同的路径
+    # 尝试不同的路径 (使用标准路径 data/A，这是我们 reorganized 后的位置)
     possible_paths = [
+        Path("data/A"),
         Path("A"),
-        Path("A\A"),
+        Path("A/A"),
+        Path("../data/A"),
         Path("../A"),
-        Path("../A\A")
     ]
     
     a_folder = None
     for path in possible_paths:
         if path.exists() and any(path.glob("*.vrp")):
             a_folder = path
+            print(f"  找到数据文件夹: {path}")
             break
     
     if not a_folder:
-        print("A文件夹不存在或没有.vrp文件")
+        print("错误: 找不到 CVRPLib A 数据集")
+        print("期望路径: data/A/ (包含 .vrp 文件)")
+        print("当前工作目录:", Path.cwd())
         return [], [], [], {}
     
     small_instances = []
