@@ -36,11 +36,11 @@ Inspired by this advancement, we develop an automatic CVRP heuristic generation 
 
 \section{Related Work}
 
-The CVRP was first introduced by \citet{dantzig1959}. Since then, a large number of heuristic algorithms have been proposed. The Nearest Neighbor heuristic iteratively selects the closest unvisited customer, which is simple but easily trapped in local optima. The Clarke-Wright Savings algorithm merges routes based on cost savings, achieving better performance in many scenarios. The Sweep algorithm clusters customers by polar angles and constructs routes sequentially.
+The CVRP was first introduced by \citet{dantzig1959}. Since then, a large number of heuristic algorithms have been proposed. The Nearest Neighbor heuristic iteratively selects the closest unvisited customer, which is simple but easily trapped in local optima. The Clarke-Wright Savings algorithm \citep{clarke1964} merges routes based on cost savings, achieving better performance in many scenarios. The Sweep algorithm \citep{gillet1974} clusters customers by polar angles and constructs routes sequentially.
 
-Recently, learning-based heuristics have emerged. Many methods use reinforcement learning or graph neural networks to learn improvement policies. However, these methods require extensive training data and computational resources.
+Recently, learning-based heuristics have emerged. Many methods use reinforcement learning \citep{bello2016neural} or graph neural networks \citep{kool2018attention} to learn improvement policies. However, these methods require extensive training data and computational resources.
 
-FunSearch is a sample-efficient framework that uses LLMs to directly generate executable algorithms. It has achieved impressive results in mathematical problems and combinatorial optimization. To the best of our knowledge, few studies apply Fun Search to automatically generate CVRP heuristics with practical optimization strategies for API stability and efficient search. This paper fills this gap.
+FunSearch \citep{romero2023funsearch} is a sample-efficient framework that uses LLMs to directly generate executable algorithms. It has achieved impressive results in mathematical problems and combinatorial optimization. To the best of our knowledge, few studies apply Fun Search to automatically generate CVRP heuristics with practical optimization strategies for API stability and efficient search. This paper fills this gap.
 
 \section{Problem Definition}
 
@@ -269,6 +269,7 @@ One limitation is that the current framework focuses on construction heuristics.
 
 This paper presents an automatic framework for generating high-performance CVRP heuristics based on Fun Search. We optimize LLM API scheduling for stability and efficiency, and propose a comprehensive evaluation system including scoring, early pruning, and stability assessment. After 10 iterations of search, the generated heuristic achieves a gap of only 10.27\% from optimal solutions, outperforming traditional methods. The framework is efficient, robust, and scalable, providing a promising direction for automated algorithm design in vehicle routing problems.
 
+\nocite{tosatto2023survey,deep2022review}
 \bibliography{iclr2024_conference}
 \bibliographystyle{iclr2024_conference}
 
