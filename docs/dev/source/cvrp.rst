@@ -6,7 +6,8 @@ CVRP 问题描述
 
 **CVRP**（Capacitated Vehicle Routing Problem，容量限制车辆路径问题）是运筹学中的经典组合优化问题。
 
-### 问题场景
+问题场景
+^^^^^^^^
 
 一个配送中心（仓库）需要用一组车辆为多个客户配送货物：
 
@@ -18,7 +19,8 @@ CVRP 问题描述
 数学定义
 --------
 
-### 输入
+输入
+^^^^
 
 给定一个 CVRP 实例 :math:`I = (G, Q, d, c)`：
 
@@ -30,18 +32,19 @@ CVRP 问题描述
      - 说明
    * - :math:`G = (V, E)`
      - 无向图
-     - :math:`V = \{0, 1, ..., n\}`，0 表示仓库，1~n 表示客户
+     - :math:`V = \\{0, 1, ..., n\\}`，0 表示仓库，1~n 表示客户
    * - :math:`Q`
      - 车辆容量
      - 每辆车的最大载重量
    * - :math:`d_i`
      - 客户 :math:`i` 的需求量
-     - 满足 :math:`d_i \leq Q`，且 :math:`d_0 = 0`（仓库无需求）
+     - 满足 :math:`d_i \\leq Q`，且 :math:`d_0 = 0`（仓库无需求）
    * - :math:`c_{ij}`
      - 距离
      - 节点 :math:`i` 到节点 :math:`j` 的欧几里得距离
 
-### 约束条件
+约束条件
+^^^^^^^^
 
 1. **每条路线必须从仓库开始并结束**
    
@@ -53,7 +56,7 @@ CVRP 问题描述
    
    .. math::
    
-      \sum_{i \in \text{route}} d_i \leq Q
+      \\sum_{i \\in \\text{route}} d_i \\leq Q
 
 3. **每个客户被访问恰好一次**
    
@@ -63,23 +66,25 @@ CVRP 问题描述
    
    可以使用多辆车，目标是总距离最短
 
-### 目标函数
+目标函数
+^^^^^^^^
 
 最小化总行驶距离：
 
 .. math::
 
-   \min \sum_{k=1}^{K} \sum_{(i,j) \in \text{route}_k} c_{ij}
+   \\min \\sum_{k=1}^{K} \\sum_{(i,j) \\in \\text{route}_k} c_{ij}
 
 其中 :math:`K` 是使用的车辆数。
 
-### 统一评分函数
+统一评分函数
+^^^^^^^^^^^^
 
 在本项目中，我们使用以下评分函数来综合评估算法性能：
 
 .. math::
 
-   \text{score} = \text{average distance} + 20 \times \text{average number of routes}
+   \\text{score} = \\text{average distance} + 20 \\times \\text{average number of routes}
 
 **说明：**
 
@@ -98,7 +103,8 @@ CVRP 是 **NP-hard** 问题：
 - 对于 :math:`n = 50` 的问题，精确求解可能需要数小时
 - 对于大规模问题（:math:`n > 100`），通常使用启发式算法
 
-### 为什么难？
+为什么难？
+^^^^^^^^^^
 
 1. **组合爆炸**
    
@@ -116,7 +122,8 @@ CVRP 是 **NP-hard** 问题：
 经典启发式算法
 --------------
 
-### 1. 最近邻算法（Nearest Neighbor）
+1. 最近邻算法（Nearest Neighbor）
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **思路**：每次选择距离当前位置最近的未服务客户
 
@@ -132,7 +139,8 @@ CVRP 是 **NP-hard** 问题：
 - ✓ 简单快速
 - ✗ 容易陷入局部最优
 
-### 2. Clarke-Wright 节约算法（Savings Algorithm）
+2. Clarke-Wright 节约算法（Savings Algorithm）
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 **思路**：计算合并两条路线的"节约值"，优先合并节约值大的
 
@@ -150,7 +158,8 @@ CVRP 是 **NP-hard** 问题：
 - ✓ 经典的构造式启发算法
 - ✗ 对容量约束敏感
 
-### 3. Sweep 算法
+3. Sweep 算法
+^^^^^^^^^^^^^
 
 **思路**：按极角将客户分组，每组服务一辆车
 
@@ -168,13 +177,15 @@ CVRP 是 **NP-hard** 问题：
 FunSearch 方法
 --------------
 
-### 传统方法的局限
+传统方法的局限
+^^^^^^^^^^^^^^
 
 - 需要人工设计启发式规则
 - 泛化能力差（在不同规模问题上表现不稳定）
 - 难以找到全局最优
 
-### FunSearch 的创新
+FunSearch 的创新
+^^^^^^^^^^^^^^^^
 
 使用 **大语言模型（LLM）+ 进化搜索** 自动生成算法：
 
@@ -183,7 +194,8 @@ FunSearch 方法
 3. **进化优化**：选择优秀算法作为下一轮的基础
 4. **迭代改进**：多轮迭代后得到高质量算法
 
-### 本项目的评分体系
+本项目的评分体系
+^^^^^^^^^^^^^^^^
 
 .. list-table:: 评估维度
    :header-rows: 1
@@ -208,7 +220,7 @@ Gap 计算公式：
 
 .. math::
 
-   \text{Gap} = \frac{\text{算法距离} - \text{最优解距离}}{\text{最优解距离}} \times 100\%
+   \\text{Gap} = \\frac{\\text{算法距离} - \\text{最优解距离}}{\\text{最优解距离}} \\times 100\\%
 
 例如：
 
@@ -219,7 +231,8 @@ Gap 计算公式：
 项目中的实现
 ------------
 
-### 核心模块
+核心模块
+^^^^^^^^
 
 .. code-block:: text
 
@@ -229,7 +242,8 @@ Gap 计算公式：
    ├── search.py     # FunSearch 搜索框架
    └── io.py         # 数据集加载
 
-### 使用示例
+使用示例
+^^^^^^^^
 
 **创建实例并求解：**
 
@@ -264,7 +278,8 @@ Gap 计算公式：
 相关资源
 --------
 
-### 经典论文
+经典论文
+^^^^^^^^
 
 1. **Dantzig & Ramser (1959)** - "The Truck Dispatching Problem"
    
@@ -278,7 +293,8 @@ Gap 计算公式：
    
    Nature 期刊，LLM 驱动算法发现的里程碑工作
 
-### 在线资源
+在线资源
+^^^^^^^^
 
 - `CVRPLib <http://vrp.atd-lab.inf.puc-rio.br/>`_ - 标准测试数据集
 - `OR-Tools <https://developers.google.com/optimization/routing>`_ - Google 的路由优化库
