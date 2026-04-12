@@ -181,6 +181,9 @@ outputs/
 │   │   ├── iterative_search_results.json
 │   │   ├── run_info.json
 │   │   └── ...
+│   ├── generated_{timestamp}/    <- 提取的 Python 代码
+│   │   ├── heuristic_iter00_score1552.24.py
+│   │   └── ...
 │   └── {timestamp}/
 └── {commit_hash}/
     └── ...
@@ -204,22 +207,14 @@ python scripts/list_results.py
 Generated Python code is stored in JSON files. To extract as `.py` files:
 
 ```bash
-# Extract from latest result
+# Extract from latest result (default: outputs/{commit}/generated_{timestamp}/)
 python scripts/extract_generated_codes.py
 
 # Extract from specific commit
 python scripts/extract_generated_codes.py --commit 7d9a1d6
 
-# Extract specific file
-python scripts/extract_generated_codes.py --input outputs/latest/iterative_search_results.json
-```
-
-This creates:
-```
-generated_codes/
-├── heuristic_iter00_score1552.24.py
-├── heuristic_iter01_score1437.54.py
-└── heuristic_iter02_score1206.22.py
+# Extract with custom output directory
+python scripts/extract_generated_codes.py --output-dir my_codes/
 ```
 
 ### JSON File Structure

@@ -19,12 +19,37 @@ from pathlib import Path
 from datetime import datetime
 
 
-def extract_codes(input_file: Path, output_dir: Path):
+def get_default_output_dir(input_file: Path) -> Path:
+    """根据输入文件路径确定默认输出目录"""
+    # 解析路径: outputs/{commit_hash}/{timestamp}/xxx.json
+    try:
+        # 处理 symlink 路径
+        resolved = input_file.resolve()
+        parts = resolved.parts
+        if 'outputs' in parts:
+            outputs_idx = parts.index('outputs')
+            if len(parts) > outputs_idx + 3:
+                # 返回: outputs/{commit_hash}/{timestamp}/generated/{filename}/
+                commit_hash = parts[outputs_idx + 1]
+                timestamp = parts[outputs_idx + 2]
+                return Path('outputs') / commit_hash / timestamp / 'generated' / input_file.stem
+    except Exception:
+        pass
+    
+    # 回退: 放在 input 文件所在目录的 generated/{filename}/ 子目录下
+    return input_file.parent / 'generated' / input_file.stem
+
+
+def extract_codes(input_file: Path, output_dir: Path = None):
     """从 JSON 结果文件中提取代码并保存为 .py 文件"""
     
     if not input_file.exists():
         print(f"错误: 文件不存在 {input_file}")
         return 0
+    
+    # 确定输出目录
+    if output_dir is None:
+        output_dir = get_default_output_dir(input_file)
     
     # 读取结果
     with open(input_file) as f:
@@ -92,8 +117,8 @@ def main():
     parser.add_argument('--commit', '-c', type=str,
                         help='指定 commit hash 提取该 commit 的所有结果')
     parser.add_argument('--output-dir', '-o', type=Path,
-                        default=Path('generated_codes'),
-                        help='输出目录')
+                        default=None,
+                        help='输出目录 (默认: outputs/{commit_hash}/generated/)')
     parser.add_argument('--list', '-l', action='store_true',
                         help='列出所有可用的结果')
     args = parser.parse_args()
@@ -106,8 +131,7 @@ def main():
     
     # 指定了输入文件
     if args.input:
-        out_dir = args.output_dir / args.input.stem
-        extract_codes(args.input, out_dir)
+        extract_codes(args.input, args.output_dir)
         return
     
     # 指定了 commit
@@ -118,7 +142,8 @@ def main():
         
         print(f"找到 {len(result_files)} 个结果文件 for commit {args.commit}")
         for f in result_files:
-            out_dir = args.output_dir / args.commit / f.parent.name
+            # 默认: outputs/{commit}/{timestamp}/generated/
+            out_dir = args.output_dir  # extract_codes 内部会处理为 None 的情况
             extract_codes(f, out_dir)
         return
     
@@ -130,17 +155,10 @@ def main():
         
         if result_files:
             for f in result_files:
-                out_dir = args.output_dir / "latest"
-                extract_codes(f, out_dir)
+                extract_codes(f, args.output_dir)
         else:
-            # 回退到旧版本兼容模式
-            old_file = Path("outputs/iterative_search_results.json")
-            if old_file.exists():
-                print("使用旧版本结果文件...")
-                extract_codes(old_file, args.output_dir)
-            else:
-                print("错误: 没有找到结果文件")
-                print("请先运行实验或指定 --input")
+            print("错误: 没有找到结果文件")
+            print("请先运行实验或指定 --input")
     else:
         print("错误: 没有找到最新结果")
         print("提示: 使用 --list 查看所有可用的结果")

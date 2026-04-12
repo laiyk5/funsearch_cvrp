@@ -47,8 +47,9 @@ outputs/*.txt
 milestone_report*.md
 final_project_report*.md
 
-# Generated heuristic codes (can be extracted from outputs/)
-generated_codes/
+# Generated heuristic codes (organized under outputs/)
+# These can be re-extracted from JSON results anytime
+outputs/**/generated_*/
 
 # Archives
 *.7z
