@@ -20,7 +20,6 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["funsearch_cvrp*"]
 
 [tool.uv]
 python-preference = "only-managed"
