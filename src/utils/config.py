@@ -80,7 +80,7 @@ def get_api_config(model: str = None):
             "https://api.openai.com/v1",
             "OpenAI"
         )
-    elif model_lower.startswith("qwen-") or model_lower.startswith("deepseek-"):
+    elif model_lower.startswith("qwen") or model_lower.startswith("deepseek"):
         # Alibaba DashScope models
         if not DASHSCOPE_API_KEY:
             raise ValueError(
