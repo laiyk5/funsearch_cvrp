@@ -20,12 +20,17 @@ Sample-Efficient FunSearch implementation for solving the Capacitated Vehicle Ro
 │       ├── config.py         # Configuration (API keys, parameters)
 │       └── models.py         # LLM client definitions
 ├── scripts/                  # Runnable scripts
-│   ├── run_milestone.py      # Milestone experiment
-│   ├── run_full_project.py   # Full benchmark
-│   ├── generate_heuristics.py# Iterative LLM-based generation
-│   ├── test_simple.py        # Quick test (1 iter, 5 heuristics)
-│   ├── test_llm.py           # Test LLM connection
-│   └── test_with_a_data.py   # Test with CVRPLib A dataset
+│   ├── check/                # Pre-run checks
+│   │   └── test_llm.py       # Test LLM connection
+│   ├── run/                  # Experiment runners
+│   │   ├── run_milestone.py      # Milestone experiment
+│   │   ├── run_full_project.py   # Full benchmark
+│   │   ├── generate_heuristics.py# Iterative LLM-based generation
+│   │   ├── test_simple.py        # Quick test (1 iter, 5 heuristics)
+│   │   └── test_with_a_data.py   # Test with CVRPLib A dataset
+│   └── analyze/              # Post-run analysis
+│       ├── extract_generated_codes.py  # Extract generated codes
+│       └── list_results.py             # List all results
 ├── tests/                    # Unit tests
 │   └── test_project.py       # Core pipeline tests
 ├── reports/                  # Report generators
@@ -116,39 +121,45 @@ Both services use the same `openai` Python package.
 
 ## Quick Start
 
-### Run Milestone Experiment
+### 1. Pre-run Checks
 ```bash
-python scripts/run_milestone.py
-python reports/generate_report.py
-```
-
-### Run Full Project
-```bash
-# With synthetic data
-python scripts/run_full_project.py --dataset synthetic
-
-# With CVRPLib data
-python scripts/run_full_project.py --dataset cvrplib --cvrplib-dir "data/A" --limit-instances 10
-```
-
-### Run Tests
-```bash
-# Unit tests
-python -m unittest discover -s tests -p "test_*.py"
-
-# Quick test
-python scripts/test_simple.py
-
 # Test LLM connection
-python scripts/test_llm.py
+python scripts/check/test_llm.py
+```
+
+### 2. Run Experiments
+```bash
+# Quick test (1 iteration, 5 heuristics)
+python scripts/run/test_simple.py
+
+# Milestone experiment
+python scripts/run/run_milestone.py
+
+# Full project with synthetic data
+python scripts/run/run_full_project.py --dataset synthetic
+
+# Full project with CVRPLib data
+python scripts/run/run_full_project.py --dataset cvrplib --cvrplib-dir "data/A" --limit-instances 10
+
+# Iterative LLM-based generation
+python scripts/run/generate_heuristics.py
 
 # Test with A dataset
-python scripts/test_with_a_data.py
+python scripts/run/test_with_a_data.py
 ```
 
-### Run Iterative Heuristic Generation
+### 3. Analyze Results
 ```bash
-python scripts/generate_heuristics.py
+# List all results
+python scripts/analyze/list_results.py
+
+# Extract generated codes
+python scripts/analyze/extract_generated_codes.py
+```
+
+### Unit Tests
+```bash
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
 ## Key Components
@@ -193,7 +204,7 @@ outputs/
 
 ```bash
 # List all results
-python scripts/list_results.py
+python scripts/analyze/list_results.py
 
 # Output:
 # Commit: 7d9a1d6
