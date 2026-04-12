@@ -1,3 +1,0 @@
-# Core project runs with Python standard library only.
-# Optional dependency for Word report export scripts:
-python-docx>=1.1.0
