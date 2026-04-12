@@ -2,6 +2,9 @@
 
 This module loads configuration from environment variables.
 Create a .env file in the project root (see .env.example for template).
+
+Both OpenAI and Alibaba DashScope use the openai Python package,
+as DashScope provides an OpenAI-compatible API.
 """
 
 import os
@@ -27,32 +30,35 @@ def _load_env_file():
 _load_env_file()
 
 # =============================================================================
-# API KEYS (Required for LLM features)
+# API CONFIGURATION (Both use openai package)
 # =============================================================================
 
-# Support both DashScope (Alibaba) and OpenAI
-DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
+# API Key - OpenAI key takes priority
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
 
-# Determine which API to use
-USE_OPENAI = bool(OPENAI_API_KEY)
-USE_DASHSCOPE = bool(DASHSCOPE_API_KEY) and not USE_OPENAI
-
-# If only DashScope is set, use it as fallback
-if not OPENAI_API_KEY and DASHSCOPE_API_KEY:
-    OPENAI_API_KEY = DASHSCOPE_API_KEY
+# Determine which service to use
+if OPENAI_API_KEY:
+    # Using OpenAI
+    API_KEY = OPENAI_API_KEY
+    API_BASE_URL = "https://api.openai.com/v1"
+    DEFAULT_MODEL = "gpt-4"
+elif DASHSCOPE_API_KEY:
+    # Using Alibaba DashScope (OpenAI-compatible)
+    API_KEY = DASHSCOPE_API_KEY
+    API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    DEFAULT_MODEL = "qwen3-max-2025-09-23"
+else:
+    # No API key configured
+    API_KEY = ""
+    API_BASE_URL = ""
+    DEFAULT_MODEL = ""
 
 # =============================================================================
 # LLM MODEL CONFIGURATION
 # =============================================================================
 
-# Default model based on which API is being used
-if USE_OPENAI:
-    _default_model = "gpt-4"  # OpenAI default
-else:
-    _default_model = "qwen3-max-2025-09-23"  # Alibaba default
-
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", _default_model)
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2000"))
 

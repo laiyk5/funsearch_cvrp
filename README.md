@@ -97,9 +97,9 @@ nano .env  # or use your preferred editor
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DASHSCOPE_API_KEY` | - | Alibaba Tongyi API key |
-| `OPENAI_API_KEY` | - | OpenAI API key (alternative) |
-| `OPENAI_MODEL` | `qwen3-max-2025-09-23` | LLM model to use |
+| `OPENAI_API_KEY` | - | OpenAI API key (recommended) |
+| `DASHSCOPE_API_KEY` | - | Alibaba Tongyi API key (alternative) |
+| `OPENAI_MODEL` | `gpt-4` or `qwen3-max-2025-09-23` | LLM model to use |
 | `LLM_TEMPERATURE` | `0.7` | Generation temperature |
 | `LLM_MAX_TOKENS` | `2000` | Max tokens per request |
 | `N_ITERATIONS` | `10` | FunSearch iterations |
@@ -107,6 +107,8 @@ nano .env  # or use your preferred editor
 | `MAX_HEURISTICS_PER_ITER` | `100` | Max heuristics per iteration |
 | `DATASET_SEED` | `2026` | Random seed for reproducibility |
 | `EARLY_PRUNING_THRESHOLD` | `1.5` | Early pruning threshold |
+
+**Note**: Both OpenAI and Alibaba DashScope use the same `openai` Python package, as DashScope provides an OpenAI-compatible API. The code automatically detects which service to use based on which API key is provided.
 
 ## Quick Start
 

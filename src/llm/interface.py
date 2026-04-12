@@ -188,19 +188,23 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
         
         for attempt in range(max_retries):
             try:
-                # 根据配置选择 API
-                if config.USE_OPENAI:
-                    # 使用 OpenAI API
-                    from openai import OpenAI
-                    client = OpenAI(api_key=config.OPENAI_API_KEY)
-                    model = config.OPENAI_MODEL
+                # 使用 openai 包调用 API (支持 OpenAI 和阿里云 DashScope)
+                from openai import OpenAI
+                
+                if not config.API_KEY:
+                    raise ValueError("未配置 API Key。请设置 OPENAI_API_KEY 或 DASHSCOPE_API_KEY 环境变量，或创建 .env 文件。")
+                
+                client = OpenAI(
+                    api_key=config.API_KEY,
+                    base_url=config.API_BASE_URL
+                )
+                model = config.OPENAI_MODEL
+                
+                # 显示使用的服务
+                if config.OPENAI_API_KEY:
                     print(f"使用 OpenAI API (模型: {model})")
                 else:
-                    # 使用阿里云通义千问 (默认)
-                    from src.utils.models import get_normal_client, ALI_TONGYI_TURBO_MODEL
-                    client = get_normal_client()
-                    model = ALI_TONGYI_TURBO_MODEL
-                    print(f"使用阿里云通义千问 API (模型: {model})")
+                    print(f"使用阿里云 DashScope API (模型: {model})")
                 
                 # 调用API
                 response = client.chat.completions.create(
