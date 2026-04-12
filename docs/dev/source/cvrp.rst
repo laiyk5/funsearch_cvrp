@@ -32,13 +32,13 @@ CVRP 问题描述
      - 说明
    * - :math:`G = (V, E)`
      - 无向图
-     - :math:`V = \\{0, 1, ..., n\\}`，0 表示仓库，1~n 表示客户
+     - :math:`V = \{0, 1, ..., n\}`，0 表示仓库，1~n 表示客户
    * - :math:`Q`
      - 车辆容量
      - 每辆车的最大载重量
    * - :math:`d_i`
      - 客户 :math:`i` 的需求量
-     - 满足 :math:`d_i \\leq Q`，且 :math:`d_0 = 0`（仓库无需求）
+     - 满足 :math:`d_i \leq Q`，且 :math:`d_0 = 0`（仓库无需求）
    * - :math:`c_{ij}`
      - 距离
      - 节点 :math:`i` 到节点 :math:`j` 的欧几里得距离
@@ -56,7 +56,7 @@ CVRP 问题描述
    
    .. math::
    
-      \\sum_{i \\in \\text{route}} d_i \\leq Q
+      \sum_{i \in \text{route}} d_i \leq Q
 
 3. **每个客户被访问恰好一次**
    
@@ -73,7 +73,7 @@ CVRP 问题描述
 
 .. math::
 
-   \\min \\sum_{k=1}^{K} \\sum_{(i,j) \\in \\text{route}_k} c_{ij}
+   \min \sum_{k=1}^{K} \sum_{(i,j) \in \text{route}_k} c_{ij}
 
 其中 :math:`K` 是使用的车辆数。
 
@@ -84,7 +84,7 @@ CVRP 问题描述
 
 .. math::
 
-   \\text{score} = \\text{average distance} + 20 \\times \\text{average number of routes}
+   \text{score} = \text{average distance} + 20 \times \text{average number of routes}
 
 **说明：**
 
@@ -220,7 +220,7 @@ Gap 计算公式：
 
 .. math::
 
-   \\text{Gap} = \\frac{\\text{算法距离} - \\text{最优解距离}}{\\text{最优解距离}} \\times 100\\%
+   \text{Gap} = \frac{\text{算法距离} - \text{最优解距离}}{\text{最优解距离}} \times 100\%
 
 例如：
 
