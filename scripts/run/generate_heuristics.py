@@ -10,10 +10,10 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.cvrp.core import CVRPInstance, evaluate_heuristic, solution_distance
-from src.cvrp.io import load_cvrplib_instance
-from src.llm.interface import LLMInterface
-from src.llm.equivalence import FunctionEquivalenceDetector
+from funsearch_cvrp.cvrp.core import CVRPInstance, evaluate_heuristic, solution_distance
+from funsearch_cvrp.cvrp.io import load_cvrplib_instance
+from funsearch_cvrp.llm.interface import LLMInterface
+from funsearch_cvrp.llm.equivalence import FunctionEquivalenceDetector
 
 
 def load_sol_file(sol_file: Path) -> List[List[int]]:
@@ -263,7 +263,7 @@ def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = 
     """
     # 从配置文件读取配置
     try:
-        from src.utils.config import (
+        from funsearch_cvrp.utils.config import (
             N_ITERATIONS, MIN_HEURISTICS_PER_ITER, MAX_HEURISTICS_PER_ITER,
             EARLY_PRUNING_THRESHOLD
         )
@@ -520,7 +520,7 @@ def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = 
 def main() -> None:
     """主函数"""
     # 导入输出管理器
-    from src.utils.output_manager import get_output_dir, save_run_info
+    from funsearch_cvrp.utils.output_manager import get_output_dir, save_run_info
     
     # 运行迭代搜索，设置为2轮迭代，每轮生成20个算法
     best_results = run_iterative_search(n_iterations=2, n_heuristics_per_iter=20)

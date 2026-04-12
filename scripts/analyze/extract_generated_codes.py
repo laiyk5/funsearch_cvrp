@@ -129,7 +129,7 @@ def main():
     
     # 列出所有结果
     if args.list:
-        from src.utils.output_manager import print_results_summary
+        from funsearch_cvrp.utils.output_manager import print_results_summary
         print_results_summary("outputs")
         return
     

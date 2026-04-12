@@ -5,7 +5,7 @@ import random
 import re
 from typing import Callable, List, Tuple, Optional
 
-from src.cvrp.core import CVRPInstance
+from funsearch_cvrp.cvrp.core import CVRPInstance
 
 
 class LLMInterface:
@@ -84,7 +84,7 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
         """
         # 从配置文件读取配置
         try:
-            from src.utils.config import OPENAI_API_KEY, OPENAI_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
+            from funsearch_cvrp.utils.config import OPENAI_API_KEY, OPENAI_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
             self.api_key = api_key or OPENAI_API_KEY
             self.model = model or OPENAI_MODEL
             self.temperature = LLM_TEMPERATURE
@@ -184,7 +184,7 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
         retry_delay = 5  # 初始重试延迟
         
         # 导入配置
-        from src.utils import config
+        from funsearch_cvrp.utils import config
         
         for attempt in range(max_retries):
             try:
@@ -628,7 +628,7 @@ def custom_heuristic(instance):
             # 确保math和random模块在全局命名空间中
             import math
             import random
-            from src.cvrp.core import CVRPInstance
+            from funsearch_cvrp.cvrp.core import CVRPInstance
             
             # 创建一个局部命名空间，包含所有必要的依赖
             local_vars = {

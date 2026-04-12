@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from src.cvrp.core import CVRPInstance, euclid, route_distance
+from funsearch_cvrp.cvrp.core import CVRPInstance, euclid, route_distance
 
 
 def clarke_wright_savings_heuristic(instance: CVRPInstance) -> list[list[int]]:

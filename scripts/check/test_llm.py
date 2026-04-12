@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from openai import OpenAI
-from src.utils import config
+from funsearch_cvrp.utils import config
 
 def test_llm():
     """测试LLM调用，输出helloworld"""

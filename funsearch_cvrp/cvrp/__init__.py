@@ -1,6 +1,6 @@
 """CVRP core package."""
 
-from src.cvrp.core import (
+from funsearch_cvrp.cvrp.core import (
     CVRPInstance,
     euclid,
     route_distance,
@@ -10,13 +10,13 @@ from src.cvrp.core import (
     evaluate_heuristic,
     generate_synthetic_benchmarks,
 )
-from src.cvrp.baselines import (
+from funsearch_cvrp.cvrp.baselines import (
     clarke_wright_savings_heuristic,
     two_opt_route,
     two_opt_improvement,
     with_two_opt,
 )
-from src.cvrp.io import load_cvrplib_instance, load_cvrplib_folder
+from funsearch_cvrp.cvrp.io import load_cvrplib_instance, load_cvrplib_folder
 
 __all__ = [
     "CVRPInstance",

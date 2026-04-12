@@ -44,16 +44,16 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.cvrp.core import (
+from funsearch_cvrp.cvrp.core import (
     CVRPInstance,
     evaluate_heuristic,
     generate_synthetic_benchmarks,
     nearest_neighbor_heuristic,
     weighted_greedy_heuristic,
 )
-from src.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
-from src.cvrp.io import load_cvrplib_instance
-from src.llm.interface import LLMInterface
+from funsearch_cvrp.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
+from funsearch_cvrp.cvrp.io import load_cvrplib_instance
+from funsearch_cvrp.llm.interface import LLMInterface
 
 
 # Color palette for routes
