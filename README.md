@@ -6,6 +6,7 @@ Sample-Efficient FunSearch implementation for solving the Capacitated Vehicle Ro
 
 ```
 .
+├── pyproject.toml            # Project config & dependencies
 ├── src/                      # Source code
 │   ├── cvrp/                 # Core CVRP algorithms
 │   │   ├── core.py           # Data model, distance utilities, baselines
@@ -53,13 +54,31 @@ Sample-Efficient FunSearch implementation for solving the Capacitated Vehicle Ro
 
 ## Setup
 
-```bash
-# Activate virtual environment
-source .venv/bin/activate  # Linux/Mac
-# or: .venv\Scripts\Activate.ps1  # Windows
+### Prerequisites
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) for dependency management
 
+### Install Dependencies
+
+```bash
+# Clone/navigate to project
+cd AI-Project
+
+# Create virtual environment and install dependencies
+uv venv
+uv pip install -e .
+
+# Or activate the environment
+source .venv/bin/activate  # Linux/Mac
+# or: .venv\Scripts\activate  # Windows
+```
+
+### Environment Variables
+
+```bash
 # Set API key (required for LLM features)
 export DASHSCOPE_API_KEY="your-api-key-here"
+# or: export OPENAI_API_KEY="your-api-key"
 ```
 
 ## Quick Start
