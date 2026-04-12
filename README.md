@@ -73,13 +73,40 @@ source .venv/bin/activate  # Linux/Mac
 # or: .venv\Scripts\activate  # Windows
 ```
 
-### Environment Variables
+### Configuration
+
+#### Option 1: Environment Variables
 
 ```bash
 # Set API key (required for LLM features)
 export DASHSCOPE_API_KEY="your-api-key-here"
 # or: export OPENAI_API_KEY="your-api-key"
 ```
+
+#### Option 2: Configuration File (Recommended)
+
+```bash
+# Copy the example configuration file
+cp .env.example .env
+
+# Edit .env with your actual values
+nano .env  # or use your preferred editor
+```
+
+#### Available Configuration Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DASHSCOPE_API_KEY` | - | Alibaba Tongyi API key |
+| `OPENAI_API_KEY` | - | OpenAI API key (alternative) |
+| `OPENAI_MODEL` | `qwen3-max-2025-09-23` | LLM model to use |
+| `LLM_TEMPERATURE` | `0.7` | Generation temperature |
+| `LLM_MAX_TOKENS` | `2000` | Max tokens per request |
+| `N_ITERATIONS` | `10` | FunSearch iterations |
+| `MIN_HEURISTICS_PER_ITER` | `50` | Min heuristics per iteration |
+| `MAX_HEURISTICS_PER_ITER` | `100` | Max heuristics per iteration |
+| `DATASET_SEED` | `2026` | Random seed for reproducibility |
+| `EARLY_PRUNING_THRESHOLD` | `1.5` | Early pruning threshold |
 
 ## Quick Start
 
