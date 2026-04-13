@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Callable, List, Tuple, Optional
 
-from funsearch_cvrp.cvrp.core import CVRPInstance, solution_distance
+from ..cvrp.core import CVRPInstance, solution_distance
 
 
 class FunctionEquivalenceDetector:

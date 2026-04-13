@@ -4,9 +4,9 @@ from dataclasses import dataclass
 import random
 from typing import Callable, List, Optional
 
-from funsearch_cvrp.cvrp.core import CVRPInstance, evaluate_heuristic, weighted_greedy_heuristic
-from funsearch_cvrp.llm.interface import LLMInterface
-from funsearch_cvrp.llm.equivalence import FunctionEquivalenceDetector
+from .cvrp.core import CVRPInstance, evaluate_heuristic, weighted_greedy_heuristic
+from .llm.interface import LLMInterface
+from .llm.equivalence import FunctionEquivalenceDetector
 
 
 @dataclass

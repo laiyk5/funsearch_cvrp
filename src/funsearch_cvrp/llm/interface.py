@@ -5,7 +5,7 @@ import random
 import re
 from typing import Callable, List, Tuple, Optional
 
-from funsearch_cvrp.cvrp.core import CVRPInstance
+from ..cvrp.core import CVRPInstance
 
 
 class LLMInterface:

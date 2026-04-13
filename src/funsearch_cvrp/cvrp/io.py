@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from funsearch_cvrp.cvrp.core import CVRPInstance
+from .core import CVRPInstance
 
 
 def _parse_coord_line(line: str) -> tuple[int, float, float]:

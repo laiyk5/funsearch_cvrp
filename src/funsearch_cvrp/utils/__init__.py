@@ -1,6 +1,6 @@
 """Utilities package."""
 
-from funsearch_cvrp.utils.config import (
+from .config import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     LLM_TEMPERATURE,
@@ -13,7 +13,7 @@ from funsearch_cvrp.utils.config import (
     EARLY_PRUNING_THRESHOLD,
     LARGE_SCALE_THRESHOLD,
 )
-from funsearch_cvrp.utils.models import get_normal_client
+from .models import get_normal_client
 
 __all__ = [
     "OPENAI_API_KEY",
