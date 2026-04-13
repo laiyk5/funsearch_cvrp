@@ -3,7 +3,7 @@ name = "funsearch-cvrp"
 dynamic = ["version"]
 description = "Sample-Efficient FunSearch for CVRP using LLM-generated heuristics"
 readme = "README.md"
-requires-python = ">=3.11, <3.12"
+requires-python = ">=3.11"
 dependencies = [
     "openai>=1.0.0",
     "python-docx>=1.1.0",
