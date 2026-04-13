@@ -5,8 +5,6 @@ from .core import (
     euclid,
     route_distance,
     solution_distance,
-    nearest_neighbor_heuristic,
-    weighted_greedy_heuristic,
     evaluate_heuristic,
     generate_synthetic_benchmarks,
 )
@@ -15,8 +13,10 @@ from .baselines import (
     two_opt_route,
     two_opt_improvement,
     with_two_opt,
+    nearest_neighbor_heuristic,
+    weighted_greedy_heuristic,
 )
-from .io import load_cvrplib_instance, load_cvrplib_folder
+from .io import load_cvrplib_folder, load_cvrplib_instance
 
 __all__ = [
     "CVRPInstance",

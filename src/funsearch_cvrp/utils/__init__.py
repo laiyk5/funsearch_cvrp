@@ -1,31 +1,7 @@
 """Utilities package."""
 
-from .config import (
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-    LLM_TEMPERATURE,
-    LLM_MAX_TOKENS,
-    N_ITERATIONS,
-    MIN_HEURISTICS_PER_ITER,
-    MAX_HEURISTICS_PER_ITER,
-    DATASET_SIZES,
-    DATASET_SEED,
-    EARLY_PRUNING_THRESHOLD,
-    LARGE_SCALE_THRESHOLD,
-)
-from .models import get_normal_client
+from .models import get_client
 
 __all__ = [
-    "OPENAI_API_KEY",
-    "OPENAI_MODEL",
-    "LLM_TEMPERATURE",
-    "LLM_MAX_TOKENS",
-    "N_ITERATIONS",
-    "MIN_HEURISTICS_PER_ITER",
-    "MAX_HEURISTICS_PER_ITER",
-    "DATASET_SIZES",
-    "DATASET_SEED",
-    "EARLY_PRUNING_THRESHOLD",
-    "LARGE_SCALE_THRESHOLD",
-    "get_normal_client",
+    "get_client"
 ]

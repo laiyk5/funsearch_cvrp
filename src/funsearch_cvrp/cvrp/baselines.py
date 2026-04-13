@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Callable
 
-from .core import CVRPInstance, euclid, route_distance
+from .core import CVRPInstance, Route, euclid, route_distance
 
 
-def clarke_wright_savings_heuristic(instance: CVRPInstance) -> list[list[int]]:
+def clarke_wright_savings_heuristic(instance: CVRPInstance) -> list[Route]:
     """Construct routes using a simple parallel Clarke-Wright savings heuristic."""
     depot = 0
     n = instance.n_customers
@@ -67,7 +67,7 @@ def clarke_wright_savings_heuristic(instance: CVRPInstance) -> list[list[int]]:
     return list(routes.values())
 
 
-def two_opt_route(instance: CVRPInstance, route: list[int]) -> list[int]:
+def two_opt_route(instance: CVRPInstance, route: Route) -> Route:
     """Run 2-opt on a single route sequence (without changing customer set)."""
     if len(route) < 4:
         return route
@@ -93,17 +93,75 @@ def two_opt_route(instance: CVRPInstance, route: list[int]) -> list[int]:
     return best
 
 
-def two_opt_improvement(instance: CVRPInstance, routes: list[list[int]]) -> list[list[int]]:
+def two_opt_improvement(instance: CVRPInstance, routes: list[Route]) -> list[Route]:
     """Apply 2-opt independently to each route."""
     return [two_opt_route(instance, r) for r in routes]
 
 
 def with_two_opt(
-    base_solver: Callable[[CVRPInstance], list[list[int]]],
-) -> Callable[[CVRPInstance], list[list[int]]]:
+    base_solver: Callable[[CVRPInstance], list[Route]],
+) -> Callable[[CVRPInstance], list[Route]]:
     """Compose a solver with route-level 2-opt improvement."""
 
-    def solver(instance: CVRPInstance) -> list[list[int]]:
+    def solver(instance: CVRPInstance) -> list[Route]:
         return two_opt_improvement(instance, base_solver(instance))
 
     return solver
+
+
+
+def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[Route]:
+    """
+    Solve the CVRP using the nearest neighbor heuristic.
+    """
+    unserved = set(range(1, instance.n_customers + 1))
+    routes: list[Route] = []
+    while unserved:
+        cap_left = instance.capacity
+        current = 0
+        route: Route = []
+        while True:
+            feasible = [c for c in unserved if instance.demands[c] <= cap_left]
+            if not feasible:
+                break
+            nxt = min(feasible, key=lambda c: euclid(instance.coords[current], instance.coords[c]))
+            route.append(nxt)
+            unserved.remove(nxt)
+            cap_left -= instance.demands[nxt]
+            current = nxt
+        routes.append(route)
+    return routes
+
+
+
+def weighted_greedy_heuristic(instance: CVRPInstance, weights: tuple[float, float, float]) -> list[Route]:
+    # score = w1 * (-distance from current) + w2 * (demand ratio) + w3 * (-distance to depot)
+    w1, w2, w3 = weights
+    unserved = set(range(1, instance.n_customers + 1))
+    routes: list[Route] = []
+
+    while unserved:
+        cap_left = instance.capacity
+        current = 0
+        route: Route = []
+
+        while True:
+            feasible = [c for c in unserved if instance.demands[c] <= cap_left]
+            if not feasible:
+                break
+
+            def score(c: int) -> float:
+                d_cur = euclid(instance.coords[current], instance.coords[c])
+                d_dep = euclid(instance.coords[c], instance.coords[0])
+                demand_ratio = instance.demands[c] / instance.capacity
+                return w1 * (-d_cur) + w2 * demand_ratio + w3 * (-d_dep)
+
+            nxt = max(feasible, key=score)
+            route.append(nxt)
+            unserved.remove(nxt)
+            cap_left -= instance.demands[nxt]
+            current = nxt
+
+        routes.append(route)
+
+    return routes

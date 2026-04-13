@@ -1,4 +1,11 @@
-"""Output directory manager - organize results by git commit."""
+"""
+Output directory manager - organize results by git commit.
+
+the output structure will be:
+outputs/
+  {commit_hash}/
+    {timestamp}/
+"""
 
 import os
 import subprocess
@@ -57,7 +64,7 @@ def get_output_dir(base_dir: str = "outputs") -> Path:
     return output_dir
 
 
-def save_run_info(output_dir: Path, extra_info: dict = None):
+def save_run_info(output_dir: Path, extra_info: dict | None = None):
     """Save run metadata to output directory."""
     import json
     

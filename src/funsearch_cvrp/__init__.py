@@ -2,7 +2,7 @@
 
 
 from . import cvrp
-from . import llm
+from . import funsearch
 from . import utils
 
-__all__ = ["cvrp", "llm", "utils"]
+__all__ = ["cvrp", "funsearch", "utils"]

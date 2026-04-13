@@ -17,12 +17,18 @@ class CVRPInstance:
     def n_customers(self) -> int:
         return len(self.demands) - 1
 
+type Route = list[int]
+type Solution = tuple[list[Route], float]  # (routes, total_distance)
+type Coord = tuple[float, float]
 
-def euclid(a: tuple[float, float], b: tuple[float, float]) -> float:
+def euclid(a: Coord, b: Coord) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
-def route_distance(instance: CVRPInstance, route: list[int]) -> float:
+def route_distance(instance: CVRPInstance, route: Route) -> float:
+    """
+    Calculate the total distance of a single route, including returning to the depot.
+    """
     if not route:
         return 0.0
     total = 0.0
@@ -35,64 +41,18 @@ def route_distance(instance: CVRPInstance, route: list[int]) -> float:
     return total
 
 
-def solution_distance(instance: CVRPInstance, routes: list[list[int]]) -> float:
+def solution_distance(instance: CVRPInstance, routes: list[Route]) -> float:
+    """
+    Calculate the total distance of a complete solution, which is the sum of distances of all routes.
+    """
     return sum(route_distance(instance, r) for r in routes)
 
 
-def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
-    unserved = set(range(1, instance.n_customers + 1))
-    routes: list[list[int]] = []
-    while unserved:
-        cap_left = instance.capacity
-        current = 0
-        route: list[int] = []
-        while True:
-            feasible = [c for c in unserved if instance.demands[c] <= cap_left]
-            if not feasible:
-                break
-            nxt = min(feasible, key=lambda c: euclid(instance.coords[current], instance.coords[c]))
-            route.append(nxt)
-            unserved.remove(nxt)
-            cap_left -= instance.demands[nxt]
-            current = nxt
-        routes.append(route)
-    return routes
 
-
-def weighted_greedy_heuristic(instance: CVRPInstance, weights: tuple[float, float, float]) -> list[list[int]]:
-    # score = w1 * (-distance from current) + w2 * (demand ratio) + w3 * (-distance to depot)
-    w1, w2, w3 = weights
-    unserved = set(range(1, instance.n_customers + 1))
-    routes: list[list[int]] = []
-
-    while unserved:
-        cap_left = instance.capacity
-        current = 0
-        route: list[int] = []
-
-        while True:
-            feasible = [c for c in unserved if instance.demands[c] <= cap_left]
-            if not feasible:
-                break
-
-            def score(c: int) -> float:
-                d_cur = euclid(instance.coords[current], instance.coords[c])
-                d_dep = euclid(instance.coords[c], instance.coords[0])
-                demand_ratio = instance.demands[c] / instance.capacity
-                return w1 * (-d_cur) + w2 * demand_ratio + w3 * (-d_dep)
-
-            nxt = max(feasible, key=score)
-            route.append(nxt)
-            unserved.remove(nxt)
-            cap_left -= instance.demands[nxt]
-            current = nxt
-
-        routes.append(route)
-
-    return routes
-
-
-def evaluate_heuristic(instances: list[CVRPInstance], solver: Callable[[CVRPInstance], list[list[int]]]) -> dict:
+def evaluate_heuristic(instances: list[CVRPInstance], solver: Callable[[CVRPInstance], list[Route]]) -> dict:
+    """
+    Evaluate a heuristic solver on a list of instances, returning average distance and average number of routes.
+    """
     total_distance = 0.0
     total_routes = 0
     per_instance: list[dict] = []
@@ -117,13 +77,13 @@ def evaluate_heuristic(instances: list[CVRPInstance], solver: Callable[[CVRPInst
     }
 
 
-def generate_synthetic_benchmarks(seed: int = 2026, sizes: list[int] = None) -> list[CVRPInstance]:
+def generate_synthetic_benchmarks(seed: int = 2026, sizes: list[int] = [20, 50, 100]) -> list[CVRPInstance]:
+    """
+    Generate synthetic CVRP instances with random coordinates and demands.
+    """
+
     rng = random.Random(seed)
     instances: list[CVRPInstance] = []
-
-    # 默认生成20、50、100客户的数据集
-    if sizes is None:
-        sizes = [20, 50, 100]
 
     for idx, n in enumerate(sizes, start=1):
         coords = [(50.0, 50.0)]
@@ -143,3 +103,23 @@ def generate_synthetic_benchmarks(seed: int = 2026, sizes: list[int] = None) -> 
         )
 
     return instances
+
+
+def check_capacity_constraint(instance: CVRPInstance, routes: list[Route]) -> bool:
+    """检查路由是否满足容量约束
+    
+    Args:
+        instance: CVRP实例
+        routes: 路由列表
+    
+    Returns:
+        是否满足容量约束
+    """
+    for route in routes:
+        total_demand = 0
+        for customer in route:
+            total_demand += instance.demands[customer]
+        if total_demand > instance.capacity:
+            print(f"  容量约束违反: 路由 {route} 的总需求 {total_demand} 超过车辆容量 {instance.capacity}")
+            return False
+    return True

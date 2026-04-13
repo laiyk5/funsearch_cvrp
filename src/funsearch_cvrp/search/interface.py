@@ -5,20 +5,11 @@ import random
 import re
 from typing import Callable, List, Tuple, Optional
 
-from ..cvrp.core import CVRPInstance
+from openai import OpenAI
 
+from ..cvrp.core import CVRPInstance, Route
 
-class LLMInterface:
-    """LLM接口，用于生成CVRP启发式算法"""
-    
-    def __init__(self, model: str = "gpt-4"):
-        """初始化LLM接口
-        
-        Args:
-            model: 使用的LLM模型名称
-        """
-        self.model = model
-        self.prompt_template = """
+PROMPT_TEMPLATE = """
 你是一个专业的运筹学和算法专家，擅长设计CVRP（容量车辆路径问题）的启发式算法。
 
 请为CVRP问题设计一个启发式算法，要求：
@@ -73,29 +64,23 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
 ```
 
 请生成一个新的、不同的启发式算法，不要重复示例中的算法。
-        """
+"""
+
+class LLMInterface:
+    """LLM接口，用于生成CVRP启发式算法"""
+
+    PROMPT_TEMPLATE = PROMPT_TEMPLATE
     
-    def __init__(self, api_key: str = None, model: str = None):
+    def __init__(self, client: OpenAI, model: str = "gpt-4"):
         """初始化LLM接口
         
         Args:
-            api_key: LLM API密钥
-            model: 使用的LLM模型
+            client: OpenAI客户端
+            model: 使用的LLM模型名称
         """
-        # 从配置文件读取配置
-        try:
-            from funsearch_cvrp.utils.config import OPENAI_API_KEY, OPENAI_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
-            self.api_key = api_key or OPENAI_API_KEY
-            self.model = model or OPENAI_MODEL
-            self.temperature = LLM_TEMPERATURE
-            self.max_tokens = LLM_MAX_TOKENS
-        except ImportError:
-            # 如果配置文件不存在，使用默认值
-            self.api_key = api_key or "YOUR_API_KEY"
-            self.model = model or "gpt-4"
-            self.temperature = 0.7
-            self.max_tokens = 2000
-    
+        self.model = model
+        self.client = client
+
     def generate_heuristic(self, previous_heuristic: Optional[str] = None) -> str:
         """使用LLM生成一个CVRP启发式算法
         
@@ -184,7 +169,7 @@ def nearest_neighbor_heuristic(instance: CVRPInstance) -> list[list[int]]:
         retry_delay = 5  # 初始重试延迟
         
         # 导入配置
-        from funsearch_cvrp.utils import config
+        from funsearch_cvrp import config
         
         for attempt in range(max_retries):
             try:
@@ -615,7 +600,7 @@ def custom_heuristic(instance):
         except:
             return False
     
-    def load_heuristic(self, code: str) -> Optional[Callable[[CVRPInstance], List[List[int]]]]:
+    def load_heuristic(self, code: str) -> Optional[Callable[[CVRPInstance], List[Route]]]:
         """加载生成的启发式算法
         
         Args:
@@ -634,7 +619,8 @@ def custom_heuristic(instance):
             local_vars = {
                 'math': math,
                 'random': random,
-                'CVRPInstance': CVRPInstance
+                'CVRPInstance': CVRPInstance,
+                'Route': Route
             }
             
             # 执行生成的代码

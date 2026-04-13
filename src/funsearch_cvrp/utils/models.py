@@ -1,56 +1,101 @@
-# models.py
-# 可用模型列表，以及获得访问模型的客户端
-#     实际使用时可以根据自己的实际情况调整
+"""
+A verified list of LLM API endpoints and their corresponding model identifiers,
+along with utility functions to parse model names and create API clients.
 
-# 阿里的通义千问大模型
-#    官网: https://bailian.console.aliyun.com/#/home
-ALI_TONGYI_API_KEY_OS_VAR_NAME = "DASHSCOPE_API_KEY"
-ALI_TONGYI_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-ALI_TONGYI_MAX_MODEL = "qwen3-max-2025-09-23"
-ALI_TONGYI_TURBO_MODEL = "qwen3-max-2025-09-23"
-ALI_TONGYI_DEEPSEEK_R1 = "deepseek-r1"
-ALI_TONGYI_DEEPSEEK_R10528 = "deepseek-r1-0528"
-ALI_TONGYI_DEEPSEEK_V3 = "deepseek-v3"
-ALI_TONGYI_REASONER_MODEL = "qvq-max-latest"
-ALI_TONGYI_EMBEDDING_V3 = "text-embedding-v3"
-ALI_TONGYI_EMBEDDING_V4 = "text-embedding-v4"
+This module serves as a central place to manage different LLM providers and their
+models, ensuring that the rest of the code can work with a consistent interface
+regardless of the underlying API.
+"""
 
-# DeepSeek
-#   官网：https://platform.deepseek.com/api_keys
-DEEPSEEK_API_KEY_OS_VAR_NAME = "DEEPSEEK_API_KEY"
-DEEPSEEK_URL = "https://api.deepseek.com/v1"
-DEEPSEEK_CHAT_MODEL = "deepseek-chat"
-DEEPSEEK_REASONER_MODEL = "deepseek-reasoner"
+ENDPOINTS = {
+    "OPENAI": {
+        "API_KEY_ENV_VAR": "OPENAI_API_KEY",
+        "BASE_URL": "https://api.openai.com/v1",
+        "MODELS": {
+            "GPT_4": "gpt-4",
+            "GPT_4_TURBO": "gpt-4-turbo",
+            "GPT_3_5_TURBO": "gpt-3.5-turbo",
+            "GPT_3_5": "gpt-3.5",
+        },
+    },
+    "ALI_TONGYI": {
+        "API_KEY_ENV_VAR": "DASHSCOPE_API_KEY",
+        "BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "MODELS": {
+            "MAX_MODEL": "qwen3-max-2025-09-23",
+            "TURBO_MODEL": "qwen3-max-2025-09-23",
+            "DEEPSEEK_R1": "deepseek-r1",
+            "DEEPSEEK_R10528": "deepseek-r1-0528",
+            "DEEPSEEK_V3": "deepseek-v3",
+            "REASONER_MODEL": "qvq-max-latest",
+            "EMBEDDING_V3": "text-embedding-v3",
+            "EMBEDDING_V4": "text-embedding-v4"
+        }
+    },
+    "DEEPSEEK": {
+        "API_KEY_ENV_VAR": "DEEPSEEK_API_KEY",
+        "BASE_URL": "https://api.deepseek.com/v1",
+        "MODELS": {
+            "CHAT_MODEL": "deepseek-chat",
+            "REASONER_MODEL": "deepseek-reasoner"
+        }
+    },
+    "TENCENT_HUNYUAN": {
+        "API_KEY_ENV_VAR": "HUNYUAN_API_KEY",
+        "BASE_URL": "https://api.hunyuan.cloud.tencent.com/v1",
+        "MODELS": {
+            "TURBO_MODEL": "hunyuan-turbos-latest",
+            "REASONER_MODEL": "hunyuan-t1-latest",
+            "LONGCONTEXT_MODEL": "hunyuan-large-longcontext"
+        }
+    }
+}
 
-# 腾讯混元
-#   官网：https://hunyuan.cloud.tencent.com/#/app/modelSquare
-TENCENT_HUNYUAN_API_KEY_OS_VAR_NAME = "HUNYUAN_API_KEY"
-TENCENT_HUNYUAN_URL = "https://api.hunyuan.cloud.tencent.com/v1"
-TENCENT_HUNYUAN_TURBO_MODEL = "hunyuan-turbos-latest"
-TENCENT_HUNYUAN_REASONER_MODEL = "hunyuan-t1-latest"
-TENCENT_HUNYUAN_LONGCONTEXT_MODEL = "hunyuan-large-longcontext"
-# TENCENT_HUNYUAN_EMBEDDING = "hunyuan-embedding"
-# TENCENT_SECRET_ID_OS_VAR_NAME = "Tencent_SecretId"
-# TENCENT_SECRET_KEY_OS_VAR_NAME = "Tencent_SecretKey"
+
+def parse_model(model_name: str):
+    """根据模型名称解析出平台和具体模型标识
+    
+    Args:
+        model_name: 模型名称，如"gpt-4"、"qwen3-max-2025-09-23"
+        
+    Returns:
+        (平台名称, 模型标识)，如("OPENAI", "gpt-4")，失败返回(None, None)
+    """
+    for platform, info in ENDPOINTS.items():
+        for key, model_id in info["MODELS"].items():
+            if model_id == model_name:
+                return platform, model_id
+    return None, None
 
 
-import os
+import logging
+
+from ..config import config
 from openai import OpenAI
-import inspect
 
+def get_client():
+    """根据配置创建并返回一个 OpenAI 客户端实例"""
+    if config["LLM"].get("OPENAI_BASE_URL"):
+        # 如果用户指定了 OPENAI_BASE_URL，尝试从模型名称解析平台
+        found = False
+        for platform, info in ENDPOINTS.items():
+            if config["LLM"]["OPENAI_BASE_URL"] == info["BASE_URL"]:
+                logging.info(f"根据 OPENAI_BASE_URL 识别平台: {platform}")
+                found = True
+                break
+        if not found:
+            logging.warning(f"无法根据 OPENAI_BASE_URL 识别平台, 将直接使用指定的 URL: {config['LLM']['OPENAI_BASE_URL']}")
+            base_url = config["LLM"]["OPENAI_BASE_URL"]
+    else:
+        platform, model_id = parse_model(config["LLM"].get("MODEL", ""))
+        if platform is None:
+            raise ValueError(f"无法识别的模型名称: {config['LLM'].get('MODEL', '')}")
+    
+        api_key = config["LLM"].get(ENDPOINTS[platform]["API_KEY_ENV_VAR"])
+        if not api_key:
+            raise ValueError(f"缺少 API Key，请设置环境变量 {ENDPOINTS[platform]['API_KEY_ENV_VAR']}")
 
-# 使用原生api获得指定平台的客户端 (默认是：阿里通义千问)
-def get_normal_client(api_key=os.getenv(ALI_TONGYI_API_KEY_OS_VAR_NAME),
-                      base_url=ALI_TONGYI_URL,
-                      verbose=False, debug=False):
-    """
-    使用原生api获得指定平台的客户端，但未指定具体模型，缺省平台为阿里云百炼
-    也可以通过传入api_key，base_url两个参数来覆盖默认值
-    verbose，debug两个参数，分别控制是否输出调试信息，是否输出详细调试信息，默认不打印
-    """
-    function_name = inspect.currentframe().f_code.co_name
-    if (verbose):
-        print(f"{function_name}-平台：{base_url}")
-    if (debug):
-        print(f"{function_name}-平台：{base_url},key：{api_key}")
-    return OpenAI(api_key=api_key, base_url=base_url)
+        base_url = ENDPOINTS[platform]["BASE_URL"]
+    
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    return client
