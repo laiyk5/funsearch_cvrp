@@ -100,6 +100,64 @@ class Sandbox:
         'Must provide a sandbox for executing untrusted code.')
 
 
+class SimpleSandbox(Sandbox):
+  """Simple sandbox executing code in isolated namespace with timeout."""
+
+  def run(
+      self,
+      program: str,
+      function_to_run: str,
+      test_input: Any,
+      timeout_seconds: int,
+  ) -> tuple[Any, bool]:
+    """Execute program and call function_to_run(test_input)."""
+    import ast
+    import contextlib
+    import io
+    import signal
+
+    # Create isolated namespace
+    namespace = {}
+
+    # Validate code is valid Python
+    try:
+      ast.parse(program)
+    except SyntaxError:
+      return None, False
+
+    # Timeout handler
+    def timeout_handler(signum, frame):
+      raise TimeoutError("Execution timeout")
+
+    # Execute with timeout
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(timeout_seconds)
+
+    try:
+      # Execute program
+      exec(program, namespace)
+
+      # Get and call function
+      if function_to_run not in namespace:
+        return None, False
+
+      func = namespace[function_to_run]
+
+      # Suppress output
+      with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stderr(io.StringIO()):
+          result = func(test_input)
+
+      signal.alarm(0)
+      return result, True
+
+    except Exception:
+      return None, False
+    finally:
+      signal.signal(signal.SIGALRM, old_handler)
+      signal.alarm(0)
+
+
 def _calls_ancestor(program: str, function_to_evolve: str) -> bool:
   """Returns whether the generated function is calling an earlier version."""
   for name in code_manipulation.get_functions_called(program):
@@ -123,6 +181,7 @@ class Evaluator:
       function_to_run: str,
       inputs: Sequence[Any],
       timeout_seconds: int = 30,
+      sandbox: Sandbox | None = None,
   ):
     self._database = database
     self._template = template
@@ -130,7 +189,7 @@ class Evaluator:
     self._function_to_run = function_to_run
     self._inputs = inputs
     self._timeout_seconds = timeout_seconds
-    self._sandbox = Sandbox()
+    self._sandbox = sandbox if sandbox is not None else SimpleSandbox()
 
   def analyse(
       self,

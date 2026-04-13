@@ -16,8 +16,8 @@ import sys
 
 from funsearch_cvrp.cvrp.core import CVRPInstance, evaluate_heuristic, solution_distance
 from funsearch_cvrp.cvrp.io import load_cvrplib_instance
-from funsearch_cvrp.llm.interface import LLMInterface
-from funsearch_cvrp.llm.equivalence import FunctionEquivalenceDetector
+from funsearch_cvrp.funsearch.interface import LLMInterface
+from funsearch_cvrp.funsearch.equivalence import FunctionEquivalenceDetector
 
 def load_sol_file(sol_file: Path) -> List[List[int]]:
     """加载.sol文件中的最优解

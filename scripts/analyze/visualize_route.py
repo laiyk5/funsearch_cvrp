@@ -52,7 +52,7 @@ from funsearch_cvrp.cvrp.core import (
 )
 from funsearch_cvrp.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
 from funsearch_cvrp.cvrp.io import load_cvrplib_instance
-from funsearch_cvrp.llm.interface import LLMInterface
+from funsearch_cvrp.funsearch.interface import LLMInterface
 
 
 # Color palette for routes

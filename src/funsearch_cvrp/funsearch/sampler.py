@@ -44,11 +44,11 @@ class Sampler:
       self,
       database: programs_database.ProgramsDatabase,
       evaluators: Sequence[evaluator.Evaluator],
-      samples_per_prompt: int,
+      llm: LLM,
   ) -> None:
     self._database = database
     self._evaluators = evaluators
-    self._llm = LLM(samples_per_prompt)
+    self._llm = llm
 
   def sample(self):
     """Continuously gets prompts, samples programs, sends them for analysis."""
@@ -60,3 +60,38 @@ class Sampler:
         chosen_evaluator = np.random.choice(self._evaluators)
         chosen_evaluator.analyse(
             sample, prompt.island_id, prompt.version_generated)
+
+
+
+class OpenAILLM(LLM):
+  """OpenAI LLM implementation for FunSearch."""
+
+  def __init__(
+      self,
+      samples_per_prompt: int,
+      model: str = "gpt-4",
+      temperature: float = 0.7,
+      max_tokens: int = 1000,
+      api_key: str | None = None,
+  ) -> None:
+    super().__init__(samples_per_prompt)
+    self._model = model
+    self._temperature = temperature
+    self._max_tokens = max_tokens
+    if api_key:
+      import openai
+      openai.api_key = api_key
+
+  def _draw_sample(self, prompt: str) -> str:
+    """Returns a predicted continuation of `prompt`."""
+    import openai
+    response = openai.chat.completions.create(
+        model=self._model,
+        messages=[
+            {"role": "system", "content": "You are an expert Python programmer. Complete the given function with an improved implementation."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=self._temperature,
+        max_tokens=self._max_tokens,
+    )
+    return response.choices[0].message.content

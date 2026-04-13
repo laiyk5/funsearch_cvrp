@@ -11,8 +11,8 @@ from pathlib import Path
 
 from funsearch_cvrp.cvrp.core import CVRPInstance, evaluate_heuristic, solution_distance
 from funsearch_cvrp.cvrp.io import load_cvrplib_instance
-from funsearch_cvrp.llm.interface import LLMInterface
-from funsearch_cvrp.llm.equivalence import FunctionEquivalenceDetector
+from funsearch_cvrp.funsearch.interface import LLMInterface
+from funsearch_cvrp.funsearch.equivalence import FunctionEquivalenceDetector
 
 
 def load_sol_file(sol_file: Path) -> List[List[int]]:
@@ -262,7 +262,7 @@ def run_iterative_search(n_iterations: int = None, n_heuristics_per_iter: int = 
     """
     # 从配置文件读取配置
     try:
-        from funsearch_cvrp.utils.config import (
+        from funsearch_cvrp.config import (
             N_ITERATIONS, MIN_HEURISTICS_PER_ITER, MAX_HEURISTICS_PER_ITER,
             EARLY_PRUNING_THRESHOLD
         )

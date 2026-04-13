@@ -11,7 +11,7 @@ from pathlib import Path
 from funsearch_cvrp.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
 from funsearch_cvrp.cvrp.core import CVRPInstance, evaluate_heuristic, generate_synthetic_benchmarks, nearest_neighbor_heuristic, weighted_greedy_heuristic
 from funsearch_cvrp.cvrp.io import load_cvrplib_folder
-from funsearch_cvrp.cvrp.search import SearchConfig, run_sample_efficient_search
+from funsearch_cvrp.search import SearchConfig, run_sample_efficient_search
 
 
 def _method_result(name: str, metrics: dict) -> dict:
