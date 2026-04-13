@@ -456,6 +456,7 @@ dependencies = [
     { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "scipy" },
+    { name = "vrplib" },
 ]
 
 [package.dev-dependencies]
@@ -477,6 +478,7 @@ requires-dist = [
     { name = "python-docx", specifier = ">=1.1.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "scipy", specifier = ">=1.17.1" },
+    { name = "vrplib", specifier = ">=2.2.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1866,4 +1868,16 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/97/c5/aff062c66b42e2183201a7ace10c6b2e959a9a16525c8e8ca8e59410d27a/virtualenv-21.2.1.tar.gz", hash = "sha256:b66ffe81301766c0d5e2208fc3576652c59d44e7b731fc5f5ed701c9b537fa78", size = 5844770, upload-time = "2026-04-09T18:47:11.482Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/0e/f083a76cb590e60dff3868779558eefefb8dfb7c9ed020babc7aa014ccbf/virtualenv-21.2.1-py3-none-any.whl", hash = "sha256:bd16b49c53562b28cf1a3ad2f36edb805ad71301dee70ddc449e5c88a9f919a2", size = 5828326, upload-time = "2026-04-09T18:47:09.331Z" },
+]
+
+[[package]]
+name = "vrplib"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/76/35/57055aaa3c42efb5e314ba81ab0274d5694d365dc7a97f7584d64923ed05/vrplib-2.2.0.tar.gz", hash = "sha256:806177ecb52ae63b126700135ad08c9c27054bf780525bcdcd7cea4b4848886f", size = 10756, upload-time = "2026-04-06T07:47:29.615Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/0d/377dd5a682ff62bb043ec08a8f70941d6e43ff71d4727942a34ab939f531/vrplib-2.2.0-py3-none-any.whl", hash = "sha256:5bed28c4ff8cfaf99da7af3081e5627bc4108f0056abc25be0285d0a8b9ad104", size = 15724, upload-time = "2026-04-06T07:47:28.507Z" },
 ]
