@@ -3,7 +3,6 @@ import funsearch
 import math
 
 @funsearch.evolve  # LLM will improve this function
-
 def priority(customer: int, current_node: int, capacity_left: int,
              demands: list, coords: list) -> float:
     """Calculate priority score for selecting next customer.

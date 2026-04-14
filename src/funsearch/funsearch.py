@@ -71,7 +71,14 @@ def main(
 
   # Create LLM if not provided
   if llm is None:
-    llm = sampler.OpenAILLM(config.samples_per_prompt)
+    llm = sampler.OpenAILLM(
+        samples_per_prompt=config.samples_per_prompt,
+        model=config.llm.model,
+        temperature=config.llm.temperature,
+        max_tokens=config.llm.max_tokens,
+        api_key=config.llm.api_key,
+        base_url=config.llm.base_url,
+    )
 
   samplers = [sampler.Sampler(database, evaluators, llm)
               for _ in range(config.num_samplers)]

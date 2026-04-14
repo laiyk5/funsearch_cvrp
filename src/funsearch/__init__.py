@@ -6,6 +6,7 @@ from . import evaluator
 from . import funsearch
 from . import programs_database
 from . import sampler
+from .config import Config, ProgramsDatabaseConfig, LLMConfig
 from .evaluator import Sandbox, SimpleSandbox
 from .sampler import LLM, OpenAILLM
 
@@ -16,6 +17,9 @@ __all__ = [
     "funsearch",
     "programs_database",
     "sampler",
+    "Config",
+    "ProgramsDatabaseConfig",
+    "LLMConfig",
     "LLM",
     "OpenAILLM",
     "Sandbox",

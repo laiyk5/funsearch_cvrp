@@ -73,19 +73,29 @@ class OpenAILLM(LLM):
       temperature: float = 0.7,
       max_tokens: int = 1000,
       api_key: str | None = None,
+      base_url: str | None = None,
   ) -> None:
     super().__init__(samples_per_prompt)
     self._model = model
     self._temperature = temperature
     self._max_tokens = max_tokens
-    if api_key:
-      import openai
-      openai.api_key = api_key
+    self._api_key = api_key
+    self._base_url = base_url
 
   def _draw_sample(self, prompt: str) -> str:
     """Returns a predicted continuation of `prompt`."""
-    import openai
-    response = openai.chat.completions.create(
+    from openai import OpenAI
+    
+    # Create client with optional base_url for proxy/custom endpoints
+    client_kwargs = {}
+    if self._api_key:
+      client_kwargs["api_key"] = self._api_key
+    if self._base_url:
+      client_kwargs["base_url"] = self._base_url
+    
+    client = OpenAI(**client_kwargs)
+    
+    response = client.chat.completions.create(
         model=self._model,
         messages=[
             {"role": "system", "content": "You are an expert Python programmer. Complete the given function with an improved implementation."},

@@ -13,11 +13,23 @@ class ProgramsDatabaseConfig:
 
 
 @dataclasses.dataclass
+class LLMConfig:
+    """Configuration for LLM."""
+    model: str = "gpt-4"
+    base_url: str | None = None  # Custom API base URL (e.g., for proxy)
+    api_key: str | None = None
+    temperature: float = 0.7
+    max_tokens: int = 1000
+    timeout: int = 30
+
+
+@dataclasses.dataclass
 class Config:
     """Main FunSearch configuration."""
     programs_database: ProgramsDatabaseConfig = dataclasses.field(
         default_factory=ProgramsDatabaseConfig
     )
+    llm: LLMConfig = dataclasses.field(default_factory=LLMConfig)
     num_evaluators: int = 1
     num_samplers: int = 1
     samples_per_prompt: int = 5
