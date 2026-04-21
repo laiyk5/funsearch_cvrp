@@ -1,0 +1,85 @@
+# FunSearch CVRP zh_CN translation
+# Copyright (C) 2025, FunSearch CVRP Team
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: FunSearch CVRP\n"
+"POT-Creation-Date: 2026-04-22 03:06+0800\n"
+"PO-Revision-Date: 2026-04-22 03:06+0800\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../source/index.rst:2
+msgid "FunSearch CVRP Developer Docs"
+msgstr "FunSearch CVRP 开发者文档"
+
+#: ../../source/index.rst:4
+msgid "Contents:"
+msgstr "目录："
+
+#: ../../source/index.rst:13
+msgid "Introduction"
+msgstr "简介"
+
+#: ../../source/index.rst:15
+msgid ""
+"This project is an automatic CVRP heuristic discovery framework based on "
+"the **FunSearch** method. By combining Large Language Models (LLMs) with "
+"evolutionary search, the framework generates high-performance CVRP "
+"solvers without hand-crafted heuristic rules."
+msgstr ""
+"本项目是一个基于 **FunSearch** 方法的 CVRP 启发式算法自动发现框架。"
+"通过结合大语言模型（LLM）与进化搜索，框架能够在无需人工设计启发式规则的情况下，"
+"自动生成高性能的 CVRP 求解算法。"
+
+#: ../../source/index.rst:20
+msgid "Key Features"
+msgstr "主要特性"
+
+#: ../../source/index.rst:22
+msgid ""
+"**Automatic algorithm generation**: LLM iteratively generates candidate "
+"algorithms"
+msgstr "**自动算法生成**：LLM 迭代生成候选算法"
+
+#: ../../source/index.rst:23
+msgid "**Sample-efficient search**: early pruning reduces evaluation overhead"
+msgstr "**样本高效搜索**：通过早期剪枝减少评估开销"
+
+#: ../../source/index.rst:24
+msgid ""
+"**Functional equivalence detection**: avoids re-evaluating semantically "
+"identical algorithms"
+msgstr "**功能等价检测**：避免重复评估语义相同的算法"
+
+#: ../../source/index.rst:25
+msgid "**Multi-scale evaluation**: tests on small / medium / large instances"
+msgstr "**多尺度评估**：在小/中/大规模实例上测试"
+
+#: ../../source/index.rst:26
+msgid "**Standard benchmarks**: supports CVRPLib benchmark datasets"
+msgstr "**标准基准测试**：支持 CVRPLib 标准数据集"
+
+#: ../../source/index.rst:29
+msgid "Quick Start"
+msgstr "快速开始"
+
+#: ../../source/index.rst:43
+msgid "Indices"
+msgstr "索引"
+
+#: ../../source/index.rst:45
+msgid ":ref:`genindex`"
+msgstr ":ref:`genindex`"
+
+#: ../../source/index.rst:46
+msgid ":ref:`modindex`"
+msgstr ":ref:`modindex`"
+
+#: ../../source/index.rst:47
+msgid ":ref:`search`"
+msgstr ":ref:`search`"

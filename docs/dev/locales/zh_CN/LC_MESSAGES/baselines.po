@@ -1,0 +1,235 @@
+# FunSearch CVRP zh_CN translation
+# Copyright (C) 2025, FunSearch CVRP Team
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: FunSearch CVRP\n"
+"POT-Creation-Date: 2026-04-22 03:06+0800\n"
+"PO-Revision-Date: 2026-04-22 03:06+0800\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../source/baselines.rst:2
+msgid "Baseline Solvers"
+msgstr "基准求解器"
+
+#: ../../source/baselines.rst:4
+msgid ""
+"All baseline solvers are implemented in "
+"``src/funsearch_cvrp/cvrp/baselines.py``. Each solver takes a "
+":class:`CVRPInstance` and returns ``list[list[int]]`` — a list of routes,"
+" where each route is an ordered list of customer indices (depot not "
+"included)."
+msgstr ""
+"所有基准求解器均实现于 ``src/funsearch_cvrp/cvrp/baselines.py``。"
+"每个求解器接受一个 :class:`CVRPInstance`，返回 ``list[list[int]]``——"
+"路线列表，每条路线为客户索引的有序列表（不含仓库节点）。"
+
+#: ../../source/baselines.rst:9
+msgid "Nearest Neighbor"
+msgstr "最近邻算法"
+
+#: ../../source/baselines.rst:11
+msgid ""
+"Greedy construction heuristic. At each step, the vehicle moves to the "
+"nearest unserved customer that fits within remaining capacity. When no "
+"feasible customer exists, the route ends and a new vehicle departs from "
+"the depot."
+msgstr ""
+"贪心构造启发式算法。每一步选择距当前位置最近且满足剩余容量的未服务客户。"
+"当无可行客户时，当前路线结束，新车辆从仓库出发。"
+
+#: ../../source/baselines.rst:15
+msgid "**Time complexity**: :math:`O(n^2)` per instance."
+msgstr "时间复杂度：每个实例 :math:`O(n^2)`。"
+
+#: ../../source/baselines.rst:17
+msgid ""
+"**Weakness**: Greedy choices early in a route can force long detours "
+"later."
+msgstr "**缺点**：路线前期的贪心选择可能导致后期出现较长绕路。"
+
+#: ../../source/baselines.rst:25
+msgid "Clarke-Wright Savings"
+msgstr "Clarke-Wright 节约算法"
+
+#: ../../source/baselines.rst:27
+msgid ""
+"Constructive heuristic based on the savings algorithm (Clarke & Wright, "
+"1964)."
+msgstr "基于节约算法（Clarke & Wright, 1964）的构造式启发算法。"
+
+#: ../../source/baselines.rst:29
+msgid ""
+"**Idea**: Start with one dedicated vehicle per customer (depot → customer"
+" → depot). Merging two routes :math:`(\\ldots, i)` and :math:`(j, "
+"\\ldots)` saves:"
+msgstr ""
+"**思路**：初始为每个客户分配一辆专属车辆（仓库 → 客户 → 仓库）。"
+"合并路线 :math:`(\\ldots, i)` 与 :math:`(j, \\ldots)` 的节约值为："
+
+#: ../../source/baselines.rst:32
+msgid "s_{ij} = c_{i,\\text{depot}} + c_{\\text{depot},j} - c_{ij}"
+msgstr "s_{ij} = c_{i,\\text{depot}} + c_{\\text{depot},j} - c_{ij}"
+
+#: ../../source/baselines.rst:36
+msgid ""
+"Routes are merged in decreasing order of savings, subject to capacity "
+"constraints and the requirement that the merged customers are at the ends"
+" of their respective routes (parallel Clarke-Wright variant)."
+msgstr ""
+"按节约值从大到小依次合并路线，需满足容量约束，"
+"且被合并的客户必须位于各自路线的端点（并行 Clarke-Wright 变体）。"
+
+#: ../../source/baselines.rst:40
+msgid ""
+"**Time complexity**: :math:`O(n^2 \\log n)` (dominated by sorting savings"
+" list)."
+msgstr "时间复杂度：:math:`O(n^2 \\log n)`（瓶颈为节约值列表排序）。"
+
+#: ../../source/baselines.rst:48
+msgid "2-opt Local Search"
+msgstr "2-opt 局部搜索"
+
+#: ../../source/baselines.rst:50
+msgid ""
+"Post-processing improvement applied independently to each route. "
+"Repeatedly reverses sub-sequences of a route while the reversal reduces "
+"total route distance. Stops when no improving swap exists."
+msgstr ""
+"对每条路线独立进行后处理优化。反复翻转路线中的子序列，"
+"直到不存在能缩短路线距离的交换为止。"
+
+#: ../../source/baselines.rst:54
+msgid ""
+"\\Delta = d(r_{i-1}, r_j) + d(r_i, r_{j+1}) - d(r_{i-1}, r_i) - d(r_j, "
+"r_{j+1})"
+msgstr ""
+"\\Delta = d(r_{i-1}, r_j) + d(r_i, r_{j+1}) - d(r_{i-1}, r_i) - d(r_j, "
+"r_{j+1})"
+
+#: ../../source/baselines.rst:58
+msgid "A swap is accepted when :math:`\\Delta < 0`."
+msgstr "当 :math:`\\Delta < 0` 时接受交换。"
+
+#: ../../source/baselines.rst:60
+msgid ""
+"**Note**: 2-opt only reorders customers within a route — it does not move"
+" customers between routes."
+msgstr "**注意**：2-opt 仅在路线内部重排客户顺序，不会将客户移至其他路线。"
+
+#: ../../source/baselines.rst:74
+msgid "Composing with ``with_two_opt``"
+msgstr "使用 ``with_two_opt`` 组合"
+
+#: ../../source/baselines.rst:76
+msgid ""
+"``with_two_opt`` is a decorator that wraps any solver with a 2-opt post-"
+"processing step:"
+msgstr "``with_two_opt`` 是一个装饰器，可为任意求解器附加 2-opt 后处理步骤："
+
+#: ../../source/baselines.rst:86
+msgid "Weighted Greedy"
+msgstr "加权贪心算法"
+
+#: ../../source/baselines.rst:88
+msgid ""
+"Generalisation of the nearest-neighbor heuristic parameterised by three "
+"weights :math:`(w_1, w_2, w_3)`. At each step the next customer is chosen"
+" to maximise:"
+msgstr ""
+"最近邻启发式的推广，由三个权重 :math:`(w_1, w_2, w_3)` 参数化。"
+"每步选择使以下评分最大的客户："
+
+#: ../../source/baselines.rst:91
+msgid ""
+"\\text{score}(c) = w_1 \\cdot (-d_{\\text{cur},c}) + w_2 \\cdot "
+"\\frac{d_c}{Q} + w_3 \\cdot (-d_{c,\\text{depot}})"
+msgstr ""
+"\\text{score}(c) = w_1 \\cdot (-d_{\\text{cur},c}) + w_2 \\cdot "
+"\\frac{d_c}{Q} + w_3 \\cdot (-d_{c,\\text{depot}})"
+
+#: ../../source/baselines.rst:95
+msgid ""
+"where :math:`d_{\\text{cur},c}` is distance from current position, "
+":math:`d_c / Q` is the demand ratio, and :math:`d_{c,\\text{depot}}` is "
+"distance from customer to depot."
+msgstr ""
+"其中 :math:`d_{\\text{cur},c}` 为当前位置到客户的距离，"
+":math:`d_c / Q` 为需求比例，"
+":math:`d_{c,\\text{depot}}` 为客户到仓库的距离。"
+
+#: ../../source/baselines.rst:98
+msgid ""
+"Setting :math:`w_1=1, w_2=0, w_3=0` recovers the nearest-neighbor "
+"heuristic. The weights are the search target for the sample-efficient "
+"search in ``src/funsearch_cvrp/search/``."
+msgstr ""
+"当 :math:`w_1=1, w_2=0, w_3=0` 时退化为最近邻算法。"
+"这三个权重是 ``src/funsearch_cvrp/search/`` 中样本高效搜索的优化目标。"
+
+#: ../../source/baselines.rst:109
+msgid "Benchmark Results"
+msgstr "基准测试结果"
+
+#: ../../source/baselines.rst:111
+msgid "Results on synthetic instances (sizes 20, 50, 100; seed 2026):"
+msgstr "合成实例（规模 20、50、100；随机种子 2026）上的测试结果："
+
+#: ../../source/baselines.rst:116
+msgid "Solver"
+msgstr "求解器"
+
+#: ../../source/baselines.rst:117
+msgid "Avg Distance"
+msgstr "平均距离"
+
+#: ../../source/baselines.rst:118
+msgid "Avg Routes"
+msgstr "平均路线数"
+
+#: ../../source/baselines.rst:119
+msgid "nearest_neighbor"
+msgstr "nearest_neighbor"
+
+#: ../../source/baselines.rst:120
+msgid "1695.33"
+msgstr "1695.33"
+
+#: ../../source/baselines.rst:121
+#: ../../source/baselines.rst:124
+msgid "12.67"
+msgstr "12.67"
+
+#: ../../source/baselines.rst:122
+msgid "nearest_neighbor + 2-opt"
+msgstr "nearest_neighbor + 2-opt"
+
+#: ../../source/baselines.rst:123
+msgid "1662.33"
+msgstr "1662.33"
+
+#: ../../source/baselines.rst:125
+msgid "clarke_wright"
+msgstr "clarke_wright"
+
+#: ../../source/baselines.rst:126
+msgid "1289.67"
+msgstr "1289.67"
+
+#: ../../source/baselines.rst:127
+#: ../../source/baselines.rst:130
+msgid "13.00"
+msgstr "13.00"
+
+#: ../../source/baselines.rst:128
+msgid "clarke_wright + 2-opt"
+msgstr "clarke_wright + 2-opt"
+
+#: ../../source/baselines.rst:129
+msgid "1288.67"
+msgstr "1288.67"

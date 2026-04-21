@@ -1,0 +1,533 @@
+# FunSearch CVRP zh_CN translation
+# Copyright (C) 2025, FunSearch CVRP Team
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: FunSearch CVRP\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-04-22 06:04+0800\n"
+"PO-Revision-Date: 2026-04-22 04:21+0800\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/funsearch.rst:2
+msgid "FunSearch Approach"
+msgstr "FunSearch 方法"
+
+#: ../../source/funsearch.rst:4
+msgid ""
+"FunSearch uses **LLM + evolutionary search** to automatically discover "
+"heuristic algorithms for CVRP, without hand-crafting rules."
+msgstr "FunSearch 使用 **LLM + 进化搜索** 自动发现 CVRP 启发式算法，无需人工设计规则。"
+
+#: ../../source/funsearch.rst:8
+msgid "Limitations of Classical Methods"
+msgstr "传统方法的局限"
+
+#: ../../source/funsearch.rst:10
+msgid "Require hand-crafted heuristic rules"
+msgstr "需要人工设计启发式规则"
+
+#: ../../source/funsearch.rst:11
+msgid "Poor generalisation across problem scales"
+msgstr "泛化能力差，在不同规模问题上表现不稳定"
+
+#: ../../source/funsearch.rst:12
+msgid "Difficult to escape local optima"
+msgstr "难以跳出局部最优"
+
+#: ../../source/funsearch.rst:15
+msgid "How FunSearch Works"
+msgstr "FunSearch 的工作原理"
+
+#: ../../source/funsearch.rst:17
+msgid ""
+"FunSearch treats algorithm discovery as a program synthesis problem. "
+"Instead of tuning parameters, it evolves the *code itself*:"
+msgstr "FunSearch 将算法发现视为程序合成问题。它不是调整参数，而是直接进化 *代码本身*："
+
+#: ../../source/funsearch.rst:20
+#, fuzzy
+msgid "**LLM generation**: sample candidate algorithm code from a prompt"
+msgstr "**LLM 生成**：根据提示词生成候选算法代码"
+
+#: ../../source/funsearch.rst:21
+msgid "**Evaluation**: score candidates on benchmark instances"
+msgstr "**评估筛选**：在数据集上评估候选算法性能"
+
+#: ../../source/funsearch.rst:22
+msgid ""
+"**Evolutionary selection**: register high-scoring programs into the "
+"database"
+msgstr ""
+
+#: ../../source/funsearch.rst:23
+msgid "**Iteration**: repeat until a high-quality algorithm emerges"
+msgstr "**迭代改进**：多轮迭代后得到高质量算法"
+
+#: ../../source/funsearch.rst:25
+msgid ""
+"The key insight is that the LLM acts as a mutation operator — it reads "
+"existing programs and writes improved versions, guided by the "
+"evolutionary pressure of the programs database."
+msgstr ""
+
+#: ../../source/funsearch.rst:30
+msgid "Specification Format"
+msgstr ""
+
+#: ../../source/funsearch.rst:32
+msgid ""
+"A FunSearch run is driven by a *specification file* — a Python module "
+"with two decorated functions:"
+msgstr ""
+
+#: ../../source/funsearch.rst:47
+msgid ""
+"``@funsearch.evolve`` marks the function the LLM will rewrite each "
+"iteration. The initial body serves as the seed program."
+msgstr ""
+
+#: ../../source/funsearch.rst:49
+msgid ""
+"``@funsearch.run`` marks the evaluation harness. It receives a list of "
+"test instances and must return a scalar score (higher = better)."
+msgstr ""
+
+#: ../../source/funsearch.rst:52
+msgid ""
+"The evaluator calls the ``evolve`` function internally; FunSearch only "
+"replaces that one function while keeping the rest of the harness fixed."
+msgstr ""
+
+#: ../../source/funsearch.rst:56
+msgid "Programs Database"
+msgstr ""
+
+#: ../../source/funsearch.rst:58
+msgid ""
+"The programs database is the core data structure that drives the "
+"evolutionary search. It maintains a diverse population of programs and "
+"produces prompts for the LLM."
+msgstr ""
+
+#: ../../source/funsearch.rst:63
+msgid "Islands"
+msgstr ""
+
+#: ../../source/funsearch.rst:65
+msgid ""
+"The database is partitioned into **islands** (default: 10). Each island "
+"evolves independently, which preserves diversity and prevents premature "
+"convergence to a single local optimum."
+msgstr ""
+
+#: ../../source/funsearch.rst:69
+msgid ""
+"Every new program generated from a prompt on island *i* is registered "
+"back into island *i*. Programs added at the very start (the seed) are "
+"broadcast to all islands simultaneously."
+msgstr ""
+
+#: ../../source/funsearch.rst:74
+msgid "Clusters"
+msgstr ""
+
+#: ../../source/funsearch.rst:76
+msgid ""
+"Within each island, programs are grouped into **clusters** by their "
+"*score signature* — a tuple of per-test scores across all evaluation "
+"inputs:"
+msgstr ""
+
+#: ../../source/funsearch.rst:83
+msgid ""
+"Two programs land in the same cluster if and only if they produce "
+"identical scores on every test input, meaning they are *behaviourally "
+"equivalent* even if their code differs. Each cluster stores its "
+"representative score (the score on the last test input) and all programs "
+"that share that signature."
+msgstr ""
+
+#: ../../source/funsearch.rst:88
+msgid ""
+"When sampling a program from a cluster, shorter programs are preferred — "
+"they are assigned higher probability via a softmax over negated lengths. "
+"This acts as an implicit Occam's razor, favouring simpler "
+"implementations."
+msgstr ""
+
+#: ../../source/funsearch.rst:93
+msgid "Cluster Sampling and Temperature Schedule"
+msgstr ""
+
+#: ../../source/funsearch.rst:95
+msgid ""
+"To build a prompt, the island samples ``functions_per_prompt`` clusters "
+"(default: 3) using a **softmax over cluster scores**:"
+msgstr ""
+
+#: ../../source/funsearch.rst:98
+#, python-brace-format
+msgid "P(\\text{cluster}_i) = \\text{softmax}\\!\\left(\\frac{s_i}{T}\\right)"
+msgstr ""
+
+#: ../../source/funsearch.rst:102
+msgid ""
+"where :math:`s_i` is the cluster's score and :math:`T` is the current "
+"temperature."
+msgstr ""
+
+#: ../../source/funsearch.rst:105
+msgid ""
+"The temperature follows a **sawtooth schedule** that decreases within "
+"each period and then resets:"
+msgstr ""
+
+#: ../../source/funsearch.rst:108
+#, python-brace-format
+msgid "T = T_0 \\times \\left(1 - \\frac{n \\bmod P}{P}\\right)"
+msgstr ""
+
+#: ../../source/funsearch.rst:112
+msgid ""
+"where :math:`T_0` is the initial temperature, :math:`n` is the total "
+"number of programs registered so far, and :math:`P` is the period length."
+msgstr ""
+
+#: ../../source/funsearch.rst:115
+msgid ""
+"**High temperature** (early in a period): near-uniform sampling → "
+"exploration"
+msgstr ""
+
+#: ../../source/funsearch.rst:116
+msgid ""
+"**Low temperature** (late in a period): peaked on best clusters → "
+"exploitation"
+msgstr ""
+
+#: ../../source/funsearch.rst:118
+msgid ""
+"This oscillation prevents the search from locking onto a single cluster "
+"too early while still exploiting good solutions as the period progresses."
+msgstr ""
+
+#: ../../source/funsearch.rst:122
+msgid "Island Reset"
+msgstr ""
+
+#: ../../source/funsearch.rst:124
+msgid ""
+"Every ``reset_period`` seconds (default: 600 s), the **bottom half** of "
+"islands (ranked by best score) are reset:"
+msgstr ""
+
+#: ../../source/funsearch.rst:127
+msgid "The weak island is discarded and replaced with a fresh empty island."
+msgstr ""
+
+#: ../../source/funsearch.rst:128
+msgid "A random island from the surviving top half is chosen as the *founder*."
+msgstr ""
+
+#: ../../source/funsearch.rst:129
+msgid "The founder's best program is seeded into the new island."
+msgstr ""
+
+#: ../../source/funsearch.rst:131
+msgid ""
+"This mechanism eliminates stagnant sub-populations while preserving the "
+"diversity of the surviving islands. The new island starts fresh but with "
+"a strong seed, giving it a head start."
+msgstr ""
+
+#: ../../source/funsearch.rst:136
+msgid "Prompt Construction"
+msgstr ""
+
+#: ../../source/funsearch.rst:138
+msgid ""
+"When the LLM is asked to generate a new program, it receives a prompt "
+"built from the sampled programs. The prompt is structured as follows:"
+msgstr ""
+
+#: ../../source/funsearch.rst:141
+msgid "The full specification template (imports, harness code, type definitions)."
+msgstr ""
+
+#: ../../source/funsearch.rst:142
+#, python-brace-format
+msgid ""
+"The sampled programs, **sorted by score ascending** (worst first, best "
+"last), renamed to ``_v0``, ``_v1``, …, ``_v{N-1}``. Each function after "
+"``_v0`` gets a docstring ``\"Improved version of _v{i-1}.\"``."
+msgstr ""
+
+#: ../../source/funsearch.rst:145
+#, python-brace-format
+msgid ""
+"An **empty function header** ``_v{N}`` with docstring ``\"Improved "
+"version of _v{N-1}.\"``, which the LLM must complete."
+msgstr ""
+
+#: ../../source/funsearch.rst:148
+msgid "Example prompt structure:"
+msgstr ""
+
+#: ../../source/funsearch.rst:166
+msgid ""
+"Presenting programs in ascending score order gives the LLM a clear "
+"improvement trajectory: it sees what was tried, how it improved, and is "
+"asked to continue that trend."
+msgstr ""
+
+#: ../../source/funsearch.rst:171
+msgid "Sampler Loop"
+msgstr ""
+
+#: ../../source/funsearch.rst:173
+msgid ""
+"One or more **samplers** run concurrently (or sequentially in the single-"
+"process implementation). Each sampler:"
+msgstr ""
+
+#: ../../source/funsearch.rst:176
+msgid "Calls ``database.get_prompt()`` to obtain a prompt and its ``island_id``."
+msgstr ""
+
+#: ../../source/funsearch.rst:177
+msgid "Sends the prompt to the LLM and draws one or more code completions."
+msgstr ""
+
+#: ../../source/funsearch.rst:178
+msgid "Parses each completion to extract the generated function body."
+msgstr ""
+
+#: ../../source/funsearch.rst:179
+msgid "Sends each parsed function to the **evaluator**."
+msgstr ""
+
+#: ../../source/funsearch.rst:181
+msgid ""
+"The sampler loop runs indefinitely until the configured number of "
+"iterations or a time budget is exhausted."
+msgstr ""
+
+#: ../../source/funsearch.rst:185
+msgid "Evaluator and Sandbox"
+msgstr ""
+
+#: ../../source/funsearch.rst:187
+msgid "The evaluator receives a generated function and:"
+msgstr ""
+
+#: ../../source/funsearch.rst:189
+msgid "**Compiles** it — checks for syntax errors."
+msgstr ""
+
+#: ../../source/funsearch.rst:190
+msgid ""
+"**Runs** it inside a ``SimpleSandbox``: an isolated ``exec`` namespace "
+"containing only ``math``, ``random``, and the problem-specific types. A "
+"``SIGALRM`` timeout kills runs that exceed the per-call time limit."
+msgstr ""
+
+#: ../../source/funsearch.rst:193
+msgid ""
+"**Scores** the function by calling the ``@funsearch.run`` harness on all "
+"test inputs."
+msgstr ""
+
+#: ../../source/funsearch.rst:195
+msgid ""
+"**Registers** the scored function in the programs database under the "
+"originating ``island_id``."
+msgstr ""
+
+#: ../../source/funsearch.rst:198
+msgid ""
+"Functions that raise exceptions, time out, or produce invalid solutions "
+"receive a score of ``-inf`` and are discarded."
+msgstr ""
+
+#: ../../source/funsearch.rst:202
+msgid "Configuration Reference"
+msgstr ""
+
+#: ../../source/funsearch.rst:204
+msgid "Key parameters in ``ProgramsDatabaseConfig``:"
+msgstr ""
+
+#: ../../source/funsearch.rst:209
+msgid "Parameter"
+msgstr ""
+
+#: ../../source/funsearch.rst:210
+msgid "Default"
+msgstr ""
+
+#: ../../source/funsearch.rst:211 ../../source/funsearch.rst:235
+msgid "Description"
+msgstr "说明"
+
+#: ../../source/funsearch.rst:212
+msgid "``num_islands``"
+msgstr ""
+
+#: ../../source/funsearch.rst:213
+#, fuzzy
+msgid "10"
+msgstr "1.0"
+
+#: ../../source/funsearch.rst:214
+msgid "Number of independent sub-populations"
+msgstr ""
+
+#: ../../source/funsearch.rst:215
+msgid "``reset_period``"
+msgstr ""
+
+#: ../../source/funsearch.rst:216
+msgid "600 s"
+msgstr ""
+
+#: ../../source/funsearch.rst:217
+msgid "Seconds between island resets"
+msgstr ""
+
+#: ../../source/funsearch.rst:218
+msgid "``functions_per_prompt``"
+msgstr ""
+
+#: ../../source/funsearch.rst:219
+msgid "3"
+msgstr ""
+
+#: ../../source/funsearch.rst:220
+msgid "Programs sampled per prompt"
+msgstr ""
+
+#: ../../source/funsearch.rst:221
+msgid "``cluster_sampling_temperature_init``"
+msgstr ""
+
+#: ../../source/funsearch.rst:222
+msgid "0.1"
+msgstr ""
+
+#: ../../source/funsearch.rst:223
+msgid "Initial softmax temperature :math:`T_0`"
+msgstr ""
+
+#: ../../source/funsearch.rst:224
+msgid "``cluster_sampling_temperature_period``"
+msgstr ""
+
+#: ../../source/funsearch.rst:225
+msgid "30 000"
+msgstr ""
+
+#: ../../source/funsearch.rst:226
+msgid "Programs-registered period :math:`P` for temperature schedule"
+msgstr ""
+
+#: ../../source/funsearch.rst:229
+msgid "Evaluation Dimensions"
+msgstr "评估维度"
+
+#: ../../source/funsearch.rst:234
+msgid "Metric"
+msgstr "指标"
+
+#: ../../source/funsearch.rst:236
+msgid "Weight"
+msgstr "权重"
+
+#: ../../source/funsearch.rst:237
+msgid "Average distance"
+msgstr "平均距离"
+
+#: ../../source/funsearch.rst:238
+msgid "Mean total route distance across all test instances"
+msgstr "所有测试实例的路径总距离均值"
+
+#: ../../source/funsearch.rst:239
+msgid "1.0"
+msgstr "1.0"
+
+#: ../../source/funsearch.rst:240
+msgid "Route count"
+msgstr "路线数量"
+
+#: ../../source/funsearch.rst:241
+msgid "Number of vehicles used (fewer is better)"
+msgstr "使用的车辆数（越少越好）"
+
+#: ../../source/funsearch.rst:242
+msgid "20.0"
+msgstr "20.0"
+
+#: ../../source/funsearch.rst:243
+msgid "Stability"
+msgstr "稳定性"
+
+#: ../../source/funsearch.rst:244
+msgid "Standard deviation across problem scales"
+msgstr "不同规模数据上的标准差"
+
+#: ../../source/funsearch.rst:245
+msgid "Tiebreaker"
+msgstr "优先选择"
+
+#: ../../source/funsearch.rst:246
+msgid "Gap"
+msgstr "Gap"
+
+#: ../../source/funsearch.rst:247
+msgid "Percentage gap to known optimal solution"
+msgstr "与最优解的差距百分比"
+
+#: ../../source/funsearch.rst:248
+msgid "Reference metric"
+msgstr "参考指标"
+
+#: ../../source/funsearch.rst:250
+msgid "Gap formula:"
+msgstr "Gap 计算公式："
+
+#: ../../source/funsearch.rst:252
+msgid ""
+"\\text{Gap} = \\frac{\\text{solver distance} - \\text{optimal "
+"distance}}{\\text{optimal distance}} \\times 100\\%"
+msgstr ""
+"\\text{Gap} = \\frac{\\text{算法距离} - \\text{最优解距离}}{\\text{最优解距离}} \\times"
+" 100\\%"
+
+#: ../../source/funsearch.rst:256
+msgid "Example: solver distance = 850, optimal = 784 → Gap = **8.4%**"
+msgstr "示例：算法距离 = 850，最优解 = 784 → Gap = **8.4%**"
+
+#: ../../source/funsearch.rst:259
+msgid "References"
+msgstr "参考文献"
+
+#: ../../source/funsearch.rst:261
+msgid ""
+"**Romera-Paredes et al. (2023)** — *\"Mathematical discoveries from "
+"program search with large language models\"* — FunSearch (Nature)"
+msgstr ""
+"**Romera-Paredes et al. (2023)** — *\"Mathematical discoveries from "
+"program search with large language models\"* — FunSearch（Nature）"
+
+#~ msgid ""
+#~ "**Evolutionary selection**: use top candidates"
+#~ " as seeds for the next round"
+#~ msgstr "**进化优化**：选择优秀算法作为下一轮的基础"
+

@@ -1,138 +1,165 @@
-"""
-Output directory manager - organize results by git commit.
+"""Output directory manager.
 
-the output structure will be:
-outputs/
-  {commit_hash}/
-    {timestamp}/
+Output structure:
+    outputs/
+        <YYYYmmdd_HHMMSS>/
+            <script_name>/
+                meta.json    # written automatically by get_output_dir()
+                ...
+        latest -> <YYYYmmdd_HHMMSS>/   # symlink to most recent run
 """
 
+from __future__ import annotations
+
+import json
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 
-def get_git_commit_hash(short: bool = True) -> str:
-    """Get current git commit hash."""
+# ---------------------------------------------------------------------------
+# Git helpers
+# ---------------------------------------------------------------------------
+
+def _git(*args: str) -> str:
     try:
-        cmd = ["git", "rev-parse", "--short" if short else "--long", "HEAD"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout.strip()
+        return subprocess.run(
+            ["git", *args], capture_output=True, text=True, check=True
+        ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "unknown"
+
+
+def get_git_commit_hash(short: bool = True) -> str:
+    return _git("rev-parse", "--short" if short else "--long", "HEAD")
 
 
 def get_git_branch() -> str:
-    """Get current git branch name."""
+    return _git("rev-parse", "--abbrev-ref", "HEAD")
+
+
+def is_git_dirty() -> bool:
     try:
-        cmd = ["git", "rev-parse", "--abbrev-ref", "HEAD"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        return result.stdout.strip()
+        result = subprocess.run(
+            ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
+        )
+        return bool(result.stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return "unknown"
+        return False
 
 
-def get_output_dir(base_dir: str = "outputs") -> Path:
-    """Get output directory organized by git commit.
-    
-    Structure: outputs/{commit_hash}/{timestamp}/
-    
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def get_output_dir(script_name: str, base_dir: str = "outputs", args: dict | None = None) -> Path:
+    """Create (or reuse) an output directory for a script and append a run entry to meta.json.
+
+    Directory layout: <base_dir>/<YYYYmmdd_HHMMSS>/<script_name>/
+
+    If the directory already exists (reuse case), the new run is appended to the
+    existing runs list in meta.json rather than overwriting it.
+
+    Args:
+        script_name: Unique name for the script (e.g. "run_funsearch").
+        base_dir: Root outputs folder.
+        args: Script arguments/parameters to record in this run's entry.
+
     Returns:
-        Path to the output directory for current run
+        Path to the script's output directory.
     """
-    commit_hash = get_git_commit_hash()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    output_dir = Path(base_dir) / commit_hash / timestamp
+    run_dir = Path(base_dir) / timestamp
+    output_dir = run_dir / script_name
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create a symlink to "latest" for convenience
-    latest_link = Path(base_dir) / "latest"
-    if latest_link.is_symlink() or latest_link.exists():
-        latest_link.unlink()
-    latest_link.symlink_to(output_dir.resolve(), target_is_directory=True)
-    
-    # Also create a symlink to "latest_commit"
-    latest_commit_link = Path(base_dir) / "latest_commit"
-    if latest_commit_link.is_symlink() or latest_commit_link.exists():
-        latest_commit_link.unlink()
-    latest_commit_link.symlink_to(
-        output_dir.parent.resolve(), target_is_directory=True
-    )
-    
+
+    _append_meta(output_dir, args)
+    _update_latest_symlink(Path(base_dir), run_dir)
+
     return output_dir
 
 
-def save_run_info(output_dir: Path, extra_info: dict | None = None):
-    """Save run metadata to output directory."""
-    import json
-    
-    info = {
-        "timestamp": datetime.now().isoformat(),
+def _append_meta(output_dir: Path, args: dict | None = None) -> None:
+    """Append a run entry to meta.json, creating it if needed."""
+    meta_file = output_dir / "meta.json"
+    if meta_file.exists():
+        with open(meta_file, encoding="utf-8") as f:
+            meta = json.load(f)
+    else:
+        meta = {"runs": []}
+
+    entry: dict = {
+        "run_time": datetime.now().isoformat(),
         "git_commit": get_git_commit_hash(short=False),
-        "git_branch": get_git_branch(),
-        "output_dir": str(output_dir),
+        "git_dirty": is_git_dirty(),
     }
-    
-    if extra_info:
-        info.update(extra_info)
-    
-    info_file = output_dir / "run_info.json"
-    with open(info_file, 'w', encoding='utf-8') as f:
-        json.dump(info, f, indent=2, ensure_ascii=False)
-    
-    return info_file
+    if args:
+        entry["args"] = args
+
+    meta.setdefault("runs", []).append(entry)
+
+    with open(meta_file, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
 
 
-def list_commit_results(base_dir: str = "outputs") -> dict:
-    """List all results organized by commit.
-    
-    Returns:
-        dict: {commit_hash: [timestamp_dirs]}
-    """
-    base_path = Path(base_dir)
-    if not base_path.exists():
-        return {}
-    
-    results = {}
-    for commit_dir in sorted(base_path.iterdir()):
-        if commit_dir.is_dir() and not commit_dir.name.startswith("."):
-            if commit_dir.name in ("latest", "latest_commit"):
-                continue
-            timestamps = sorted(
-                [d.name for d in commit_dir.iterdir() if d.is_dir()]
-            )
-            results[commit_dir.name] = timestamps
-    
-    return results
+def update_meta(output_dir: Path, extra: dict) -> None:
+    """Merge extra fields into the latest run entry in meta.json."""
+    meta_file = output_dir / "meta.json"
+    if meta_file.exists():
+        with open(meta_file, encoding="utf-8") as f:
+            meta = json.load(f)
+    else:
+        meta = {"runs": []}
+
+    if meta.get("runs"):
+        meta["runs"][-1].update(extra)
+
+    with open(meta_file, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
 
 
-def print_results_summary(base_dir: str = "outputs"):
-    """Print summary of all results."""
-    results = list_commit_results(base_dir)
-    
-    if not results:
+def _update_latest_symlink(base: Path, target: Path) -> None:
+    latest = base / "latest"
+    if latest.is_symlink() or latest.exists():
+        latest.unlink()
+    latest.symlink_to(target.resolve(), target_is_directory=True)
+
+
+# ---------------------------------------------------------------------------
+# Result listing
+# ---------------------------------------------------------------------------
+
+def list_results(base_dir: str = "outputs") -> list[dict]:
+    """Return a list of run metadata dicts, newest first."""
+    base = Path(base_dir)
+    if not base.exists():
+        return []
+
+    runs = []
+    for d in sorted(base.iterdir(), reverse=True):
+        if not d.is_dir() or d.name == "latest":
+            continue
+        meta_file = d / "meta.json"
+        if meta_file.exists():
+            with open(meta_file, encoding="utf-8") as f:
+                meta = json.load(f)
+        else:
+            meta = {}
+        runs.append({"dir": d.name, **meta})
+    return runs
+
+
+def print_results_summary(base_dir: str = "outputs") -> None:
+    runs = list_results(base_dir)
+    if not runs:
         print(f"No results found in {base_dir}/")
         return
-    
+
     print(f"\n{'='*60}")
-    print(f"Results Summary in {base_dir}/")
+    print(f"Results in {base_dir}/")
     print(f"{'='*60}\n")
-    
-    for commit, timestamps in sorted(results.items()):
-        print(f"Commit: {commit}")
-        for ts in timestamps:
-            result_dir = Path(base_dir) / commit / ts
-            # Check for results
-            has_json = any(result_dir.glob("*.json"))
-            status = "✓" if has_json else "○"
-            print(f"  {status} {ts}")
-        print()
-    
-    print("Symlinks:")
-    latest = Path(base_dir) / "latest"
-    latest_commit = Path(base_dir) / "latest_commit"
-    if latest.exists():
-        print(f"  latest -> {latest.resolve().relative_to(Path(base_dir).resolve())}")
-    if latest_commit.exists():
-        print(f"  latest_commit -> {latest_commit.resolve().relative_to(Path(base_dir).resolve())}")
+    for r in runs:
+        dirty = " (dirty)" if r.get("git_dirty") else ""
+        commit = r.get("git_commit", "unknown")[:8]
+        print(f"  {r['dir']}  commit={commit}{dirty}")
+    print()

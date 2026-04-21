@@ -1,167 +1,154 @@
-数据集
-=====
+Datasets
+========
 
-本项目使用 ``CVRPLib`` 的 ``A-instances`` 数据集作为标准测试基准。
+This project uses the **CVRPLib A-instances** as the standard benchmark.
 
-什么是 CVRPLib？
----------------
+What is CVRPLib?
+----------------
 
-**CVRPLib**（Capacitated Vehicle Routing Problem Library）是学术界公认的 CVRP **标准测试库**，类似于：
+**CVRPLib** (Capacitated Vehicle Routing Problem Library) is the community-standard
+benchmark library for CVRP research — analogous to ImageNet for vision or GLUE for NLP.
+Researchers use these datasets to compare algorithm performance on a level playing field.
 
-- 图像领域的 ImageNet
-- NLP 领域的 GLUE 基准
+A-instances
+-----------
 
-研究人员使用这些数据集来**公平比较不同算法的性能**。
+The A-instances were created by Augerat et al. (1995) and are among the most widely
+used CVRP benchmarks.
 
-A-instances 数据集
-------------------
-
-A-instances 是由 Augerat 等人在 1995 年创建的经典 CVRP 测试集。
-
-命名规则
-^^^^^^^^
+Naming Convention
+^^^^^^^^^^^^^^^^^
 
 .. code-block:: text
 
    A-n32-k5
-   │  │   └── 需要 5 辆车
-   │  └────── 32 个节点（1个仓库 + 31个客户）
-   └───────── A 类实例（Augerat 等人创建）
+   │  │   └── 5 vehicles required
+   │  └────── 32 nodes (1 depot + 31 customers)
+   └───────── A-class instances (Augerat et al.)
 
-规模分布
-^^^^^^^^
+Scale Distribution
+^^^^^^^^^^^^^^^^^^
 
-.. list-table:: 数据集规模分布
+.. list-table::
    :header-rows: 1
 
-   * - 规模
-     - 客户数
-     - 文件示例
-     - 用途
-   * - 小规模
-     - 32-35
+   * - Scale
+     - Customers
+     - Example files
+     - Use
+   * - Small
+     - 32–35
      - A-n32-k5, A-n35-k5
-     - 快速测试
-   * - 中规模
-     - 36-55
+     - Quick testing / early pruning
+   * - Medium
+     - 36–55
      - A-n44-k6, A-n55-k9
-     - 标准测试
-   * - 大规模
-     - 56-80
+     - Standard evaluation
+   * - Large
+     - 56–80
      - A-n69-k9, A-n80-k10
-     - 压力测试
+     - Stress testing
 
-文件格式
---------
+File Format
+-----------
 
-.vrp 文件（问题定义）
-^^^^^^^^^^^^^^^^^^^^
+.vrp file (problem definition)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: text
 
-   NAME : A-n32-k5          # 实例名称
+   NAME : A-n32-k5
    COMMENT : (Augerat et al, No of trucks: 5, Optimal value: 784)
-   TYPE : CVRP              # 问题类型
-   DIMENSION : 32           # 总节点数（含仓库）
-   EDGE_WEIGHT_TYPE : EUC_2D  # 欧几里得距离
-   CAPACITY : 100           # 车辆容量
+   TYPE : CVRP
+   DIMENSION : 32           # total nodes including depot
+   EDGE_WEIGHT_TYPE : EUC_2D
+   CAPACITY : 100
 
-   NODE_COORD_SECTION       # 节点坐标（x, y）
-    1 82 76                 # 1号节点：仓库（配送中心）
-    2 96 44                 # 2号节点：客户1，坐标(96,44)
-    3 50 5                  # 3号节点：客户2，坐标(50,5)
+   NODE_COORD_SECTION
+    1 82 76                 # node 1: depot
+    2 96 44                 # node 2: customer 1
+    3 50 5
     ...
 
-   DEMAND_SECTION           # 需求量
-    1 0                     # 仓库需求为0
-    2 19                    # 客户1需求19
-    3 21                    # 客户2需求21
+   DEMAND_SECTION
+    1 0                     # depot demand = 0
+    2 19
+    3 21
     ...
 
-.sol 文件（最优解）
-^^^^^^^^^^^^^^^^^^^
+.sol file (optimal solution)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: text
 
-   Route #1: 2 11 7        # 第1辆车服务客户2,11,7
-   Route #2: 5 8 3         # 第2辆车服务客户5,8,3
-   Route #3: 4 10 9        # ...
-   Cost 784                 # 最优总距离
+   Route #1: 2 11 7
+   Route #2: 5 8 3
+   Route #3: 4 10 9
+   Cost 784
 
-在项目中使用
-------------
+Usage
+-----
 
-评估生成的算法
-^^^^^^^^^^^^^^
+Loading instances
+^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
-   from src.cvrp.io import load_cvrplib_folder
-   from src.cvrp.core import solution_distance
+   from funsearch_cvrp.cvrp.io import load_cvrplib_folder
 
-   # 加载数据集
-   instances = load_cvrplib_folder("data/A")
+   instances_and_solutions = load_cvrplib_folder("data/cvrplib/A")
+   instances = [inst for inst, _ in instances_and_solutions]
 
-   # 评估算法
-   for inst in instances:
-       routes = my_heuristic(inst)
-       distance = solution_distance(inst, routes)
-       print(f"{inst.name}: 距离={distance:.1f}")
+Computing gap to optimal
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-与最优解比较
-^^^^^^^^^^^^
+.. code-block:: python
 
-代码会计算 **Gap**（差距百分比）：
+   from funsearch_cvrp.cvrp.core import solution_distance
 
-.. math::
+   for inst, opt_routes in instances_and_solutions:
+       my_routes = my_heuristic(inst)
+       my_dist = solution_distance(inst, my_routes)
+       opt_dist = solution_distance(inst, opt_routes)
+       gap = (my_dist - opt_dist) / opt_dist * 100
+       print(f"{inst.name}: gap={gap:.1f}%")
 
-   \text{Gap} = \frac{\text{你的算法距离} - \text{最优解距离}}{\text{最优解距离}} \times 100\%
+Progressive evaluation strategy
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-示例：
-
-.. code-block:: text
-
-   你的算法距离: 850
-   最优解距离: 784
-   Gap = (850-784)/784 × 100% = 8.4%
-
-渐进式测试策略
-^^^^^^^^^^^^^^
-
-.. list-table:: 测试策略
+.. list-table::
    :header-rows: 1
 
-   * - 数据规模
-     - 客户数
-     - 用途
-   * - 小数据
+   * - Scale
+     - Customers
+     - Purpose
+   * - Small
      - ≤35
-     - 快速筛选算法（早期剪枝）
-   * - 中数据
-     - 36-55
-     - 评估中等规模表现
-   * - 大数据
+     - Fast candidate screening (early pruning)
+   * - Medium
+     - 36–55
+     - Mid-scale performance
+   * - Large
      - ≥56
-     - 最终评估算法质量
+     - Final quality assessment
 
-数据来源
---------
-
-- **创建者**: Augerat et al. (1995)
-- **经典论文**: *"Computational results with a branch and cut code for the capacitated vehicle routing problem"*
-- **官网**: http://vrp.atd-lab.inf.puc-rio.br/
-
-文件位置
---------
-
-项目中的数据集文件位置：
+Data Location
+-------------
 
 .. code-block:: text
 
    data/
-   └── A/
-       ├── A-n32-k5.vrp    # 问题定义
-       ├── A-n32-k5.sol    # 最优解
-       ├── A-n33-k5.vrp
-       ├── A-n33-k5.sol
-       └── ...
+   └── cvrplib/
+       └── A/
+           ├── A-n32-k5.vrp
+           ├── A-n32-k5.sol
+           ├── A-n33-k5.vrp
+           ├── A-n33-k5.sol
+           └── ...
+
+Source
+------
+
+- **Created by**: Augerat et al. (1995)
+- **Paper**: *"Computational results with a branch and cut code for the capacitated vehicle routing problem"*
+- **Website**: http://vrp.atd-lab.inf.puc-rio.br/

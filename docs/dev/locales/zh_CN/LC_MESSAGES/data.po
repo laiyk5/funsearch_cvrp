@@ -1,0 +1,201 @@
+# FunSearch CVRP zh_CN translation
+# Copyright (C) 2025, FunSearch CVRP Team
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: FunSearch CVRP\n"
+"POT-Creation-Date: 2026-04-22 03:06+0800\n"
+"PO-Revision-Date: 2026-04-22 03:06+0800\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../source/data.rst:2
+msgid "Datasets"
+msgstr "数据集"
+
+#: ../../source/data.rst:4
+msgid "This project uses the **CVRPLib A-instances** as the standard benchmark."
+msgstr "本项目使用 **CVRPLib A-instances** 作为标准测试基准。"
+
+#: ../../source/data.rst:7
+msgid "What is CVRPLib?"
+msgstr "什么是 CVRPLib？"
+
+#: ../../source/data.rst:9
+msgid ""
+"**CVRPLib** (Capacitated Vehicle Routing Problem Library) is the "
+"community-standard benchmark library for CVRP research — analogous to "
+"ImageNet for vision or GLUE for NLP. Researchers use these datasets to "
+"compare algorithm performance on a level playing field."
+msgstr ""
+"**CVRPLib** （容量限制车辆路径问题库）是学术界公认的 CVRP 标准测试库，"
+"类似于图像领域的 ImageNet 或 NLP 领域的 GLUE 基准。"
+"研究人员使用这些数据集公平比较不同算法的性能。"
+
+#: ../../source/data.rst:14
+msgid "A-instances"
+msgstr "A-instances 数据集"
+
+#: ../../source/data.rst:16
+msgid ""
+"The A-instances were created by Augerat et al. (1995) and are among the "
+"most widely used CVRP benchmarks."
+msgstr "A-instances 由 Augerat 等人于 1995 年创建，是使用最广泛的 CVRP 基准之一。"
+
+#: ../../source/data.rst:20
+msgid "Naming Convention"
+msgstr "命名规则"
+
+#: ../../source/data.rst:30
+msgid "Scale Distribution"
+msgstr "规模分布"
+
+#: ../../source/data.rst:35
+#: ../../source/data.rst:122
+msgid "Scale"
+msgstr "规模"
+
+#: ../../source/data.rst:36
+#: ../../source/data.rst:123
+msgid "Customers"
+msgstr "客户数"
+
+#: ../../source/data.rst:37
+msgid "Example files"
+msgstr "文件示例"
+
+#: ../../source/data.rst:38
+msgid "Use"
+msgstr "用途"
+
+#: ../../source/data.rst:39
+#: ../../source/data.rst:125
+msgid "Small"
+msgstr "小规模"
+
+#: ../../source/data.rst:40
+msgid "32–35"
+msgstr "32–35"
+
+#: ../../source/data.rst:41
+msgid "A-n32-k5, A-n35-k5"
+msgstr "A-n32-k5, A-n35-k5"
+
+#: ../../source/data.rst:42
+msgid "Quick testing / early pruning"
+msgstr "快速测试 / 早期剪枝"
+
+#: ../../source/data.rst:43
+#: ../../source/data.rst:128
+msgid "Medium"
+msgstr "中规模"
+
+#: ../../source/data.rst:44
+#: ../../source/data.rst:129
+msgid "36–55"
+msgstr "36–55"
+
+#: ../../source/data.rst:45
+msgid "A-n44-k6, A-n55-k9"
+msgstr "A-n44-k6, A-n55-k9"
+
+#: ../../source/data.rst:46
+msgid "Standard evaluation"
+msgstr "标准测试"
+
+#: ../../source/data.rst:47
+#: ../../source/data.rst:131
+msgid "Large"
+msgstr "大规模"
+
+#: ../../source/data.rst:48
+msgid "56–80"
+msgstr "56–80"
+
+#: ../../source/data.rst:49
+msgid "A-n69-k9, A-n80-k10"
+msgstr "A-n69-k9, A-n80-k10"
+
+#: ../../source/data.rst:50
+msgid "Stress testing"
+msgstr "压力测试"
+
+#: ../../source/data.rst:53
+msgid "File Format"
+msgstr "文件格式"
+
+#: ../../source/data.rst:56
+msgid ".vrp file (problem definition)"
+msgstr ".vrp 文件（问题定义）"
+
+#: ../../source/data.rst:80
+msgid ".sol file (optimal solution)"
+msgstr ".sol 文件（最优解）"
+
+#: ../../source/data.rst:90
+msgid "Usage"
+msgstr "在项目中使用"
+
+#: ../../source/data.rst:93
+msgid "Loading instances"
+msgstr "加载实例"
+
+#: ../../source/data.rst:103
+msgid "Computing gap to optimal"
+msgstr "计算与最优解的差距"
+
+#: ../../source/data.rst:117
+msgid "Progressive evaluation strategy"
+msgstr "渐进式测试策略"
+
+#: ../../source/data.rst:124
+msgid "Purpose"
+msgstr "用途"
+
+#: ../../source/data.rst:126
+msgid "≤35"
+msgstr "≤35"
+
+#: ../../source/data.rst:127
+msgid "Fast candidate screening (early pruning)"
+msgstr "快速筛选候选算法（早期剪枝）"
+
+#: ../../source/data.rst:130
+msgid "Mid-scale performance"
+msgstr "评估中等规模表现"
+
+#: ../../source/data.rst:132
+msgid "≥56"
+msgstr "≥56"
+
+#: ../../source/data.rst:133
+msgid "Final quality assessment"
+msgstr "最终评估算法质量"
+
+#: ../../source/data.rst:136
+msgid "Data Location"
+msgstr "文件位置"
+
+#: ../../source/data.rst:150
+msgid "Source"
+msgstr "数据来源"
+
+#: ../../source/data.rst:152
+msgid "**Created by**: Augerat et al. (1995)"
+msgstr "**创建者**：Augerat et al. (1995)"
+
+#: ../../source/data.rst:153
+msgid ""
+"**Paper**: *\"Computational results with a branch and cut code for the "
+"capacitated vehicle routing problem\"*"
+msgstr ""
+"**论文**：*\"Computational results with a branch and cut code for the "
+"capacitated vehicle routing problem\"*"
+
+#: ../../source/data.rst:154
+msgid "**Website**: http://vrp.atd-lab.inf.puc-rio.br/"
+msgstr "**官网**：http://vrp.atd-lab.inf.puc-rio.br/"

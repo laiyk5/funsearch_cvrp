@@ -20,7 +20,7 @@ from src.funsearch import code_manipulation, config as config_lib, evaluator, fu
 from src.funsearch_cvrp.config import config as project_config
 from src.funsearch_cvrp.cvrp.core import CVRPInstance
 from src.funsearch_cvrp.cvrp.io import load_cvrplib_folder
-from src.funsearch_cvrp.utils.output_manager import get_output_dir, save_run_info
+from src.funsearch_cvrp.utils.output_manager import get_output_dir, update_meta
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -448,7 +448,12 @@ def main() -> None:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
     else:
-        output_dir = get_output_dir()
+        output_dir = get_output_dir("run_funsearch", args={
+            "specification": str(spec_path),
+            "iterations": args.iterations,
+            "mock_llm": args.mock_llm,
+            "model": config.llm.model if config.llm else "mock",
+        })
 
     checkpoint_path = output_dir / "checkpoint.pkl"
     history_path = output_dir / "history.jsonl"
@@ -542,14 +547,6 @@ def main() -> None:
     )
 
     # Save results
-
-    save_run_info(output_dir, extra_info={
-        "specification": str(spec_path),
-        "inputs": [str(i) for i in inputs],
-        "iterations": args.iterations,
-        "mock_llm": args.mock_llm,
-        "model": config.llm.model if config.llm else "mock",
-    })
     save_funsearch_results(
         output_dir,
         database,

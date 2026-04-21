@@ -1,0 +1,526 @@
+# FunSearch CVRP zh_CN translation
+# Copyright (C) 2025, FunSearch CVRP Team
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: FunSearch CVRP\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-04-22 04:21+0800\n"
+"PO-Revision-Date: 2026-04-22 03:06+0800\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../source/cvrp.rst:2
+msgid "CVRP Problem"
+msgstr "CVRP 问题"
+
+#: ../../source/cvrp.rst:5
+msgid "Problem Definition"
+msgstr "问题定义"
+
+#: ../../source/cvrp.rst:7
+msgid ""
+"The **Capacitated Vehicle Routing Problem (CVRP)** is a classic "
+"combinatorial optimisation problem in operations research."
+msgstr "**容量限制车辆路径问题（CVRP）** 是运筹学中的经典组合优化问题。"
+
+#: ../../source/cvrp.rst:11
+msgid "Scenario"
+msgstr "问题场景"
+
+#: ../../source/cvrp.rst:13
+msgid ""
+"A distribution centre (depot) must deliver goods to a set of customers "
+"using a fleet of vehicles:"
+msgstr "一个配送中心（仓库）需要用一组车辆为多个客户配送货物："
+
+#: ../../source/cvrp.rst:15
+msgid "Each customer has a demand quantity"
+msgstr "每个客户有一个需求量"
+
+#: ../../source/cvrp.rst:16
+msgid "Each vehicle has a capacity limit"
+msgstr "每辆车有容量限制"
+
+#: ../../source/cvrp.rst:17
+msgid "Vehicles depart from the depot, serve customers, and return to the depot"
+msgstr "车辆从仓库出发，服务完客户后返回仓库"
+
+#: ../../source/cvrp.rst:18
+msgid "Objective: minimise total travel distance"
+msgstr "目标：最小化总行驶距离"
+
+#: ../../source/cvrp.rst:21
+msgid "Mathematical Definition"
+msgstr "数学定义"
+
+#: ../../source/cvrp.rst:24
+msgid "Input"
+msgstr "输入"
+
+#: ../../source/cvrp.rst:26
+msgid "Given a CVRP instance :math:`I = (G, Q, d, c)`:"
+msgstr "给定一个 CVRP 实例 :math:`I = (G, Q, d, c)`："
+
+#: ../../source/cvrp.rst:28
+msgid "CVRP Input Parameters"
+msgstr "CVRP 输入参数"
+
+#: ../../source/cvrp.rst:31
+msgid "Symbol"
+msgstr "符号"
+
+#: ../../source/cvrp.rst:32
+msgid "Meaning"
+msgstr "含义"
+
+#: ../../source/cvrp.rst:33
+msgid "Notes"
+msgstr "说明"
+
+#: ../../source/cvrp.rst:34
+msgid ":math:`G = (V, E)`"
+msgstr ":math:`G = (V, E)`"
+
+#: ../../source/cvrp.rst:35
+msgid "Undirected graph"
+msgstr "无向图"
+
+#: ../../source/cvrp.rst:36
+#, python-brace-format
+msgid ":math:`V = \\{0, 1, \\ldots, n\\}`, node 0 is the depot, 1–n are customers"
+msgstr ":math:`V = \\{0, 1, \\ldots, n\\}`，节点 0 为仓库，1–n 为客户"
+
+#: ../../source/cvrp.rst:37
+msgid ":math:`Q`"
+msgstr ":math:`Q`"
+
+#: ../../source/cvrp.rst:38
+msgid "Vehicle capacity"
+msgstr "车辆容量"
+
+#: ../../source/cvrp.rst:39
+msgid "Maximum load per vehicle"
+msgstr "每辆车的最大载重量"
+
+#: ../../source/cvrp.rst:40
+msgid ":math:`d_i`"
+msgstr ":math:`d_i`"
+
+#: ../../source/cvrp.rst:41
+msgid "Demand of customer :math:`i`"
+msgstr "客户 :math:`i` 的需求量"
+
+#: ../../source/cvrp.rst:42
+msgid ":math:`d_i \\leq Q`; depot has :math:`d_0 = 0`"
+msgstr ":math:`d_i \\leq Q`；仓库需求 :math:`d_0 = 0`"
+
+#: ../../source/cvrp.rst:43
+#, python-brace-format
+msgid ":math:`c_{ij}`"
+msgstr ":math:`c_{ij}`"
+
+#: ../../source/cvrp.rst:44 ../../source/cvrp.rst:119
+msgid "Distance"
+msgstr "距离"
+
+#: ../../source/cvrp.rst:45
+msgid "Euclidean distance between nodes :math:`i` and :math:`j`"
+msgstr "节点 :math:`i` 到节点 :math:`j` 的欧几里得距离"
+
+#: ../../source/cvrp.rst:48
+msgid "Constraints"
+msgstr "约束条件"
+
+#: ../../source/cvrp.rst:50
+msgid "**Each route starts and ends at the depot**"
+msgstr "**每条路线必须从仓库开始并结束**"
+
+#: ../../source/cvrp.rst:52
+msgid "Route form: depot → customer₁ → customer₂ → … → depot"
+msgstr "路线形式：仓库 → 客户₁ → 客户₂ → … → 仓库"
+
+#: ../../source/cvrp.rst:54
+msgid "**Capacity constraint**"
+msgstr "**容量约束**"
+
+#: ../../source/cvrp.rst:56
+msgid "Total demand on each route must not exceed vehicle capacity:"
+msgstr "每条路线上所有客户的总需求不超过车辆容量："
+
+#: ../../source/cvrp.rst:58
+msgid "\\sum_{i \\in \\text{route}} d_i \\leq Q"
+msgstr "\\sum_{i \\in \\text{route}} d_i \\leq Q"
+
+#: ../../source/cvrp.rst:62
+msgid "**Each customer is visited exactly once**"
+msgstr "**每个客户被访问恰好一次**"
+
+#: ../../source/cvrp.rst:64
+msgid ""
+"**Number of vehicles is unlimited** (but minimising vehicle count is "
+"desirable)"
+msgstr "**车辆数量不限** （但通常希望尽量少）"
+
+#: ../../source/cvrp.rst:67
+msgid "Objective"
+msgstr "目标函数"
+
+#: ../../source/cvrp.rst:69
+msgid "Minimise total travel distance:"
+msgstr "最小化总行驶距离："
+
+#: ../../source/cvrp.rst:71
+msgid "\\min \\sum_{k=1}^{K} \\sum_{(i,j) \\in \\text{route}_k} c_{ij}"
+msgstr "\\min \\sum_{k=1}^{K} \\sum_{(i,j) \\in \\text{route}_k} c_{ij}"
+
+#: ../../source/cvrp.rst:75
+msgid "where :math:`K` is the number of vehicles used."
+msgstr "其中 :math:`K` 是使用的车辆数。"
+
+#: ../../source/cvrp.rst:78
+msgid "Score Function"
+msgstr "评分函数"
+
+#: ../../source/cvrp.rst:80
+msgid ""
+"This project uses the following composite score to evaluate solver "
+"performance:"
+msgstr "本项目使用以下综合评分函数评估算法性能："
+
+#: ../../source/cvrp.rst:82 ../../source/cvrp.rst:146
+#, python-brace-format
+msgid ""
+"\\text{score} = \\text{avg\\_distance} + 20 \\times "
+"\\text{avg\\_num\\_routes}"
+msgstr ""
+"\\text{score} = \\text{avg\\_distance} + 20 \\times "
+"\\text{avg\\_num\\_routes}"
+
+#: ../../source/cvrp.rst:86
+msgid ""
+"**Distance term**: average total route distance across instances — lower "
+"is better"
+msgstr "**距离项**：所有实例的平均总路径距离，越小越好"
+
+#: ../../source/cvrp.rst:87
+msgid "**Route count term**: average number of vehicles used — lower is better"
+msgstr "**路线数项**：平均使用车辆数，越少越好"
+
+#: ../../source/cvrp.rst:88
+msgid "**Weight 20**: hyperparameter balancing the two objectives"
+msgstr "**权重 20**：平衡两个目标的超参数"
+
+#: ../../source/cvrp.rst:90
+msgid "A lower score indicates better performance."
+msgstr "评分越低表示算法性能越好。"
+
+#: ../../source/cvrp.rst:93
+msgid "Representation"
+msgstr "表示方式"
+
+#: ../../source/cvrp.rst:96
+msgid "Route"
+msgstr "路线"
+
+#: ../../source/cvrp.rst:98
+msgid ""
+"A route is an ordered list of customer indices (integers), implicitly "
+"starting and ending at the depot (node 0). The depot is **not** included "
+"in the list."
+msgstr "路线是客户索引（整数）的有序列表，隐式地从仓库（节点 0）出发并返回仓库。列表中 **不包含** 仓库节点。"
+
+#: ../../source/cvrp.rst:105
+msgid "A solution is a list of routes — one per vehicle used:"
+msgstr "一个解由多条路线组成，每辆车对应一条路线："
+
+#: ../../source/cvrp.rst:111
+msgid "In code, these types are aliased as:"
+msgstr "在代码中，这些类型定义为："
+
+#: ../../source/cvrp.rst:121
+msgid "All distances are **Euclidean** (straight-line) between 2-D coordinates:"
+msgstr "所有距离均为二维坐标间的欧几里得距离（直线距离）："
+
+#: ../../source/cvrp.rst:123
+#, python-brace-format
+msgid "c_{ij} = \\sqrt{(x_i - x_j)^2 + (y_i - y_j)^2}"
+msgstr "c_{ij} = \\sqrt{(x_i - x_j)^2 + (y_i - y_j)^2}"
+
+#: ../../source/cvrp.rst:127
+msgid "The distance of a single route includes the return leg to the depot:"
+msgstr "单条路线的距离包含返回仓库的行程："
+
+#: ../../source/cvrp.rst:129
+msgid ""
+"\\text{dist}(\\text{route}) = c_{0,\\, r_1} + \\sum_{k=1}^{m-1} "
+"c_{r_k,\\, r_{k+1}} + c_{r_m,\\, 0}"
+msgstr ""
+"\\text{dist}(\\text{route}) = c_{0,\\, r_1} + \\sum_{k=1}^{m-1} "
+"c_{r_k,\\, r_{k+1}} + c_{r_m,\\, 0}"
+
+#: ../../source/cvrp.rst:133
+msgid "The total solution distance is the sum over all routes:"
+msgstr "解的总距离为所有路线距离之和："
+
+#: ../../source/cvrp.rst:135
+#, python-brace-format
+msgid "\\text{dist}(\\text{solution}) = \\sum_{k} \\text{dist}(\\text{route}_k)"
+msgstr "\\text{dist}(\\text{solution}) = \\sum_{k} \\text{dist}(\\text{route}_k)"
+
+#: ../../source/cvrp.rst:140
+msgid "What makes a good solution?"
+msgstr "什么是好的解？"
+
+#: ../../source/cvrp.rst:142
+msgid ""
+"A solution is **feasible** if every customer is visited exactly once and "
+"no route exceeds vehicle capacity. Among feasible solutions, a good one "
+"minimises the composite score:"
+msgstr "若每个客户恰好被访问一次且所有路线均不超过车辆容量，则该解是 **可行的**。在可行解中，好的解应使综合评分最小："
+
+#: ../../source/cvrp.rst:150
+msgid "Intuitively: short total travel distance with as few vehicles as possible."
+msgstr "直观来说：在尽量少用车辆的前提下，使总行驶距离尽可能短。"
+
+#: ../../source/cvrp.rst:153
+msgid "What makes a good solver?"
+msgstr "什么是好的求解器？"
+
+#: ../../source/cvrp.rst:155
+msgid ""
+"A good solver produces low-score solutions consistently across instances "
+"of varying size. Concretely, it should:"
+msgstr "好的求解器能在不同规模的实例上稳定地产生低评分的解。具体而言，它应该："
+
+#: ../../source/cvrp.rst:158
+msgid "**Be fast** — practical solvers run in seconds, not hours"
+msgstr "**速度快** — 实用求解器应在秒级内完成，而非数小时"
+
+#: ../../source/cvrp.rst:159
+msgid ""
+"**Generalise** — perform well on both small and large instances without "
+"tuning"
+msgstr "**泛化性强** — 无需调参即可在小规模和大规模实例上均表现良好"
+
+#: ../../source/cvrp.rst:160
+msgid "**Be stable** — low variance across different random instances"
+msgstr "**稳定性好** — 在不同随机实例上方差小"
+
+#: ../../source/cvrp.rst:161
+#, python-format
+msgid ""
+"**Approach optimality** — a Gap below ~10% is considered competitive for "
+"heuristics"
+msgstr "**接近最优** — Gap 低于约 10% 即被认为是有竞争力的启发式算法"
+
+#: ../../source/cvrp.rst:164
+msgid "Complexity"
+msgstr "问题复杂度"
+
+#: ../../source/cvrp.rst:166
+msgid "CVRP is **NP-hard**:"
+msgstr "CVRP 是 **NP-hard** 问题："
+
+#: ../../source/cvrp.rst:168
+msgid "The number of feasible solutions grows exponentially with :math:`n`"
+msgstr "随着客户数 :math:`n` 增加，可行解数量呈指数增长"
+
+#: ../../source/cvrp.rst:169
+msgid "Exact solvers for :math:`n = 50` may take hours"
+msgstr "对于 :math:`n = 50` 的问题，精确求解可能需要数小时"
+
+#: ../../source/cvrp.rst:170
+msgid "For large instances (:math:`n > 100`), heuristics are the practical choice"
+msgstr "对于大规模问题（:math:`n > 100`），启发式算法是实用选择"
+
+#: ../../source/cvrp.rst:173
+msgid "Why is it hard?"
+msgstr "为什么难？"
+
+#: ../../source/cvrp.rst:175
+msgid ""
+"CVRP is a generalisation of the **Travelling Salesman Problem (TSP)**: if"
+" you set vehicle capacity to infinity and use a single vehicle, CVRP "
+"reduces exactly to TSP. Since TSP is already NP-hard, CVRP inherits that "
+"hardness — and adds more on top."
+msgstr ""
+"CVRP 是 **旅行商问题（TSP）** 的推广：当车辆容量无限且只使用一辆车时，CVRP 退化为 TSP。由于 TSP 本身已是 NP-"
+"hard，CVRP 继承了这一难度，并在此基础上更难。"
+
+#: ../../source/cvrp.rst:179
+msgid "The difficulty compounds from two sources:"
+msgstr "难度来自两个相互叠加的因素："
+
+#: ../../source/cvrp.rst:181
+msgid ""
+"**Partitioning** — dividing :math:`n` customers into :math:`K` routes is "
+"a set partition problem. The number of ways to do this grows as "
+":math:`O(K^n)` (Stirling numbers of the second kind), which is super-"
+"exponential in :math:`n`."
+msgstr ""
+"**划分** — 将 :math:`n` 个客户分配给 :math:`K` 条路线是一个集合划分问题。划分方案数以 "
+":math:`O(K^n)`（第二类 Stirling 数）的速度增长，关于 :math:`n` 是超指数级的。"
+
+#: ../../source/cvrp.rst:184
+msgid ""
+"**Routing** — once customers are assigned to a vehicle, finding the "
+"optimal visit order within that route is itself a TSP. So you face an "
+"exponential search inside each partition of an already exponential "
+"partition space."
+msgstr ""
+"**路线排序** — 一旦客户被分配给某辆车，在该路线内寻找最优访问顺序本身就是一个 "
+"TSP。因此，在已经是指数级的划分空间中，每个划分内部还需要进行指数级搜索。"
+
+#: ../../source/cvrp.rst:187
+msgid ""
+"**Conflicting objectives** — minimising distance vs. minimising vehicle "
+"count"
+msgstr "**目标冲突** — 最短距离与最少车辆数相互制约"
+
+#: ../../source/cvrp.rst:188
+msgid "**Coupled constraints** — capacity limits and route planning interact"
+msgstr "**约束耦合** — 容量约束与路径规划相互影响"
+
+#: ../../source/cvrp.rst:191
+msgid "References"
+msgstr "参考文献"
+
+#: ../../source/cvrp.rst:193
+msgid ""
+"**Dantzig & Ramser (1959)** — *\"The Truck Dispatching Problem\"* — "
+"founding paper for CVRP"
+msgstr ""
+"**Dantzig & Ramser (1959)** — *\"The Truck Dispatching Problem\"* — CVRP "
+"开创性论文"
+
+#: ../../source/cvrp.rst:194
+msgid ""
+"**Clarke & Wright (1964)** — *\"Scheduling of Vehicles from a Central "
+"Depot\"* — savings algorithm"
+msgstr ""
+"**Clarke & Wright (1964)** — *\"Scheduling of Vehicles from a Central "
+"Depot\"* — 节约算法经典论文"
+
+#~ msgid ""
+#~ "**Combinatorial explosion** — assigning "
+#~ ":math:`n` customers to :math:`K` vehicles "
+#~ "has exponentially many configurations"
+#~ msgstr "**组合爆炸** — 将 :math:`n` 个客户分配给 :math:`K` 辆车的方案数是指数级的"
+
+#~ msgid "FunSearch Approach"
+#~ msgstr "FunSearch 方法"
+
+#~ msgid "Limitations of classical methods"
+#~ msgstr "传统方法的局限"
+
+#~ msgid "Require hand-crafted heuristic rules"
+#~ msgstr "需要人工设计启发式规则"
+
+#~ msgid "Poor generalisation across problem scales"
+#~ msgstr "泛化能力差，在不同规模问题上表现不稳定"
+
+#~ msgid "Difficult to escape local optima"
+#~ msgstr "难以跳出局部最优"
+
+#~ msgid "FunSearch innovation"
+#~ msgstr "FunSearch 的创新"
+
+#~ msgid ""
+#~ "Uses **LLM + evolutionary search** to"
+#~ " generate algorithms automatically:"
+#~ msgstr "使用 **LLM + 进化搜索** 自动生成算法："
+
+#~ msgid "**LLM generation**: generate candidate algorithm code from a prompt"
+#~ msgstr "**LLM 生成**：根据提示词生成候选算法代码"
+
+#~ msgid "**Evaluation**: score candidates on benchmark instances"
+#~ msgstr "**评估筛选**：在数据集上评估性能"
+
+#~ msgid ""
+#~ "**Evolutionary selection**: use top candidates"
+#~ " as seeds for the next round"
+#~ msgstr "**进化优化**：选择优秀算法作为下一轮的基础"
+
+#~ msgid "**Iteration**: repeat until a high-quality algorithm emerges"
+#~ msgstr "**迭代改进**：多轮迭代后得到高质量算法"
+
+#~ msgid "Evaluation Dimensions"
+#~ msgstr "评估维度"
+
+#~ msgid "Metric"
+#~ msgstr "指标"
+
+#~ msgid "Description"
+#~ msgstr "说明"
+
+#~ msgid "Weight"
+#~ msgstr "权重"
+
+#~ msgid "Average distance"
+#~ msgstr "平均距离"
+
+#~ msgid "Mean total route distance across all test instances"
+#~ msgstr "所有测试实例的路径总距离均值"
+
+#~ msgid "1.0"
+#~ msgstr "1.0"
+
+#~ msgid "Route count"
+#~ msgstr "路线数量"
+
+#~ msgid "Number of vehicles used (fewer is better)"
+#~ msgstr "使用的车辆数（越少越好）"
+
+#~ msgid "20.0"
+#~ msgstr "20.0"
+
+#~ msgid "Stability"
+#~ msgstr "稳定性"
+
+#~ msgid "Standard deviation across problem scales"
+#~ msgstr "不同规模数据上的标准差"
+
+#~ msgid "Tiebreaker"
+#~ msgstr "优先选择"
+
+#~ msgid "Gap"
+#~ msgstr "Gap"
+
+#~ msgid "Percentage gap to known optimal solution"
+#~ msgstr "与最优解的差距百分比"
+
+#~ msgid "Reference metric"
+#~ msgstr "参考指标"
+
+#~ msgid "Gap formula:"
+#~ msgstr "Gap 计算公式："
+
+#~ msgid ""
+#~ "\\text{Gap} = \\frac{\\text{solver distance} -"
+#~ " \\text{optimal distance}}{\\text{optimal distance}}"
+#~ " \\times 100\\%"
+#~ msgstr ""
+#~ "\\text{Gap} = \\frac{\\text{算法距离} - "
+#~ "\\text{最优解距离}}{\\text{最优解距离}} \\times 100\\%"
+
+#~ msgid "Example: solver distance = 850, optimal = 784 → Gap = **8.4%**"
+#~ msgstr "示例：算法距离 = 850，最优解 = 784 → Gap = **8.4%**"
+
+#~ msgid ""
+#~ "**Romera-Paredes et al. (2023)** — "
+#~ "*\"Mathematical discoveries from program "
+#~ "search with large language models\"* —"
+#~ " FunSearch (Nature)"
+#~ msgstr ""
+#~ "**Romera-Paredes et al. (2023)** — "
+#~ "*\"Mathematical discoveries from program "
+#~ "search with large language models\"* —"
+#~ " FunSearch（Nature）"
+

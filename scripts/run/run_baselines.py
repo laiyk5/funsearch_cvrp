@@ -20,7 +20,7 @@ from src.funsearch_cvrp.cvrp import (
     with_two_opt,
 )
 from src.funsearch_cvrp.cvrp.io import load_cvrplib_folder
-from src.funsearch_cvrp.utils.output_manager import get_output_dir, save_run_info
+from src.funsearch_cvrp.utils.output_manager import get_output_dir
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -161,14 +161,12 @@ def main() -> None:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
     else:
-        output_dir = get_output_dir()
-
-    save_run_info(output_dir, extra_info={
-        "dataset": args.dataset,
-        "num_instances": len(instances),
-        "instance_names": [inst.name for inst in instances],
-        "solvers": list(solvers.keys()),
-    })
+        output_dir = get_output_dir("run_baselines", args={
+            "dataset": args.dataset,
+            "num_instances": len(instances),
+            "instance_names": [inst.name for inst in instances],
+            "solvers": list(solvers.keys()),
+        })
     save_results(output_dir, results, instances)
 
     logging.info(f"All done. Output directory: {output_dir}")

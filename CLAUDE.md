@@ -4,25 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Sample-Efficient FunSearch** implementation for solving the **Capacitated Vehicle Routing Problem (CVRP)**. The project uses LLMs (OpenAI GPT or Alibaba Qwen) to automatically generate and optimize heuristic algorithms, combining evolutionary search with LLM-generated code.
+Sample-Efficient FunSearch implementation for solving the Capacitated Vehicle Routing Problem (CVRP). Uses LLMs to automatically generate and optimize heuristic algorithms, combining evolutionary search with LLM-generated code.
 
 ## Common Commands
 
 ### Setup
 ```bash
-# Create virtual environment and install dependencies
 uv venv
 uv pip install -e .
-
-# Or activate existing environment
 source .venv/bin/activate
 ```
 
 ### Configuration
-Copy `.env.example` to `.env` and configure API keys:
+Copy `config.ini.example` to `config.ini` and set your API key:
 ```bash
-cp .env.example .env
-# Edit .env with your API keys
+cp config.ini.example config.ini
+# Edit config.ini: set dashscope_api_key or openai_api_key under [LLM]
 ```
 
 ### Testing
@@ -30,124 +27,51 @@ cp .env.example .env
 # Run all unit tests
 python -m unittest discover -s tests -p "test_*.py"
 
-# Test LLM connection
-python scripts/check/test_llm.py
-
-# Quick test (1 iteration, 5 heuristics)
-python scripts/run/test_simple.py
-```
-
-### Running Experiments
-```bash
-# Milestone experiment
-python scripts/run/run_milestone.py
-
-# Full project with synthetic data
-python scripts/run/run_full_project.py --dataset synthetic
-
-# Full project with CVRPLib data
-python scripts/run/run_full_project.py --dataset cvrplib --cvrplib-dir "data/A" --limit-instances 10
-
-# Iterative LLM-based generation
-python scripts/run/generate_heuristics.py
-```
-
-### Analyzing Results
-```bash
-# List all results (organized by git commit)
-python scripts/analyze/list_results.py
-
-# Extract generated Python code from JSON results
-python scripts/analyze/extract_generated_codes.py
-
-# Visualize results (generates charts in outputs/{commit}/{timestamp}/charts/)
-python scripts/analyze/visualize_results.py
-
-# Generate dashboard only
-python scripts/analyze/visualize_results.py --dashboard-only
-
-# Visualize specific result
-python scripts/analyze/visualize_results.py --commit 7d9a1d6 --timestamp 20250412_153033
-
-# Visualize CVRP routes on a map
-python scripts/analyze/visualize_route.py --instance data/A/A-n32-k5.vrp --auto-solve
-
-# Compare multiple solvers visually
-python scripts/analyze/visualize_route.py --instance data/A/A-n32-k5.vrp \
-    --compare "nearest_neighbor,clarke_wright,clarke_wright_2opt"
-
-# Visualize synthetic instance with specific solver
-python scripts/analyze/visualize_route.py --synthetic --size 50 --auto-solve --solver clarke_wright
-
-# Visualize FunSearch-generated heuristic (by iteration number)
-python scripts/analyze/visualize_route.py --synthetic --size 50 --funsearch --iteration 2
-
-# Visualize FunSearch heuristic by ID
-python scripts/analyze/visualize_route.py --instance data/A/A-n32-k5.vrp --funsearch --iteration-id 6
-
-# Visualize from a saved heuristic file
-python scripts/analyze/visualize_route.py --instance data/A/A-n32-k5.vrp \
-    --heuristic-file outputs/{commit}/{timestamp}/generated/heuristic_iter02.py
+# Run a single test
+python -m unittest tests.test_project.TestCVRPProject.test_baseline_runs
 ```
 
 ### Linting/Formatting
 ```bash
-# Ruff is configured in pyproject.toml
 ruff check .
 ruff format .
 ```
 
+### Analyzing Results
+```bash
+python scripts/analyze/list_results.py
+python scripts/analyze/extract_generated_codes.py
+python scripts/analyze/visualize_results.py
+python scripts/analyze/visualize_route.py --instance data/cvrplib/A/A-n32-k5.vrp --auto-solve
+```
+
 ## Architecture Overview
 
-### Core Components
+The project has two independent packages under `src/`:
 
-**CVRP Data Model** (`src/cvrp/core.py`)
-- `CVRPInstance`: Dataclass with `name`, `capacity`, `demands`, `coords`
-- `evaluate_heuristic()`: Evaluates a solver on multiple instances
-- `weighted_greedy_heuristic()`: Main solver parameterized by 3 weights `(w1, w2, w3)`
-- `generate_synthetic_benchmarks()`: Creates test instances with deterministic seed
+### `src/funsearch_cvrp/` — Custom CVRP search pipeline
 
-**Sample-Efficient Search** (`src/cvrp/search.py`)
-- `SearchConfig`: Configuration dataclass for search parameters
-- `run_sample_efficient_search()`: Main algorithm combining weight optimization with LLM generation
-- **Early Pruning**: Evaluates on small subset first; skips full evaluation if early score > 1.07x threshold
-- **Score Function**: `avg_distance + 20.0 * avg_num_routes` (lower is better)
+- **`cvrp/core.py`**: `CVRPInstance` dataclass, `evaluate_heuristic()`, `generate_synthetic_benchmarks()`. Score function: `avg_distance + 20.0 * avg_num_routes` (lower is better).
+- **`cvrp/baselines.py`**: `clarke_wright_savings_heuristic()`, `two_opt_route()`, `with_two_opt()` decorator.
+- **`cvrp/io.py`**: CVRPLib `.vrp` file loader.
+- **`search/__init__.py`**: Exports `SearchConfig`, `run_sample_efficient_search` (weight-based), `run_iterative_search` (LLM-based), `LLMInterface`, `FunctionEquivalenceDetector`.
+- **`search/generator.py`**: `run_iterative_search()` — main LLM-driven search loop with early pruning. Evaluates on a small subset first; skips full evaluation if early score exceeds threshold.
+- **`search/interface.py`**: `LLMInterface` — generates heuristics via LLM, validates and loads them via `exec()` in a sandboxed namespace (`math`, `random`, `CVRPInstance` only). Falls back to 5 hardcoded template heuristics on API failure.
+- **`search/equivalence.py`**: `FunctionEquivalenceDetector` — SHA256 behavior signature to skip redundant evaluations.
+- **`config.py`**: Reads `config.ini` via `configparser`. Sections: `[LLM]` (model, endpoint, API keys, temperature) and `[SEARCH]` (iterations, pruning thresholds, etc.).
+- **`utils/models.py`**: `ENDPOINTS` dict mapping provider names to base URLs and model IDs. `get_client()` creates an `openai.OpenAI` client based on `config.ini`.
 
-**LLM Interface** (`src/llm/interface.py`)
-- `LLMInterface`: Generates heuristics via LLM calls
-- `generate_heuristic()`: Prompts LLM to generate new CVRP algorithm
-- `validate_heuristic()`: Syntax validation of generated code
-- `load_heuristic()`: Uses `exec()` to load generated code as executable function
+### `src/funsearch/` — DeepMind FunSearch reference implementation
 
-**Function Equivalence** (`src/llm/equivalence.py`)
-- `FunctionEquivalenceDetector`: Prevents redundant evaluations
-- `get_behavior_signature()`: SHA256 hash of behavior on test instances
-- `are_equivalent()`: Compares two heuristics for functional equivalence
-
-**Baselines** (`src/cvrp/baselines.py`)
-- `clarke_wright_savings_heuristic()`: Classic savings algorithm
-- `two_opt_route()`: 2-opt local improvement
-- `with_two_opt()`: Decorator to compose any solver with 2-opt
+Standalone port of the official FunSearch pipeline (Apache 2.0). Entry point is `funsearch.main()`. Uses decorator-based specification: functions marked `@funsearch.evolve` are mutated by the LLM; `@funsearch.run` is the evaluation function. Components: `programs_database.py` (island-based population), `sampler.py` (LLM sampling), `evaluator.py` (sandboxed execution), `code_manipulation.py` (AST manipulation).
 
 ### Configuration System
 
-Environment variables loaded from `.env` file (see `src/utils/config.py`):
-
-**API Keys** (model name determines which API to use):
-- `OPENAI_API_KEY`: For GPT models
-- `DASHSCOPE_API_KEY`: For Qwen/DeepSeek models via Alibaba DashScope
-
-**Key Config Variables**:
-- `OPENAI_MODEL`: Model name (gpt-4, qwen-max, etc.)
-- `N_ITERATIONS`: FunSearch iterations (default: 10)
-- `MIN_HEURISTICS_PER_ITER` / `MAX_HEURISTICS_PER_ITER`: 50-100
-- `EARLY_PRUNING_THRESHOLD`: 1.5 (score multiplier for pruning)
-- `DATASET_SEED`: 2026 (for reproducibility)
+`config.ini` (gitignored) overrides defaults from `config.ini.example`. The `config` object in `src/funsearch_cvrp/config.py` is a `configparser.ConfigParser` instance — access values via `config["LLM"]["MODEL"]` etc. API endpoint is auto-selected from `utils/models.py:ENDPOINTS` based on the model name, or can be overridden with `openai_base_url`.
 
 ### Output Organization
 
-Results are organized by **git commit hash** to avoid overwriting:
-
+Results are organized by git commit hash:
 ```
 outputs/
 ├── latest -> symlink to latest run
@@ -155,25 +79,6 @@ outputs/
 │   ├── {timestamp}/
 │   │   ├── iterative_search_results.json
 │   │   └── run_info.json
-│   └── generated_{timestamp}/  # Extracted Python files
+│   └── generated_{timestamp}/
 │       └── heuristic_iter00_score1552.24.py
 ```
-
-### Search Algorithm Flow
-
-1. **Initialization**: Generate random weights or use LLM to generate heuristics (50/50 split)
-2. **Early Evaluation**: Test on 2 small instances first
-3. **Pruning**: Skip full evaluation if early score > threshold * 1.07
-4. **Full Evaluation**: Evaluate promising candidates on all instances
-5. **Population Update**: Keep top candidates, mutate weights or generate new heuristics
-6. **Repeat** for configured iterations
-
-### Code Execution Safety
-
-Generated code from LLM is executed via `exec()` in a controlled namespace with limited imports (`math`, `random`, `CVRPInstance` only). The `validate_heuristic()` method checks for forbidden keywords before execution.
-
-### Testing Strategy
-
-- Tests in `tests/test_project.py` use synthetic benchmarks with fixed seed (2026)
-- Smoke tests verify pipeline runs without errors
-- Tests check that search returns valid candidates with expected structure
