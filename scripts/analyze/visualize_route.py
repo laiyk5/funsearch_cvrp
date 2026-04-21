@@ -46,12 +46,12 @@ import numpy as np
 from funsearch_cvrp.cvrp.core import (
     CVRPInstance,
     evaluate_heuristic,
-    generate_synthetic_benchmarks,
     nearest_neighbor_heuristic,
     weighted_greedy_heuristic,
 )
 from funsearch_cvrp.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
 from funsearch_cvrp.cvrp.io import load_cvrplib_instance
+from funsearch_cvrp.cvrp.utils import generate_synthetic_benchmarks
 from funsearch_cvrp.funsearch.interface import LLMInterface
 
 

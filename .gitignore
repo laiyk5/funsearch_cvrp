@@ -41,11 +41,15 @@ docs/**/build/
 .DS_Store
 Thumbs.db
 
+# Project Settings
+
+config.ini
+
 # Project outputs (keep structure, ignore generated files)
-outputs/*.json
-outputs/*.txt
+outputs/*
 milestone_report*.md
 final_project_report*.md
+
 
 # Generated heuristic codes (organized under outputs/)
 # These can be re-extracted from JSON results anytime

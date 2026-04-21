@@ -2,27 +2,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-import random
 from typing import Callable
 
+type Coord = tuple[float, float]
 
 @dataclass
 class CVRPInstance:
     name: str
     capacity: int
     demands: list[int]
-    coords: list[tuple[float, float]]
+    coords: list[Coord]
+    number_of_trucks: int | None = None
 
     @property
     def n_customers(self) -> int:
         return len(self.demands) - 1
+    
+    def __str__(self):
+        return f"CVRPInstance {self.name}: capacity={self.capacity}, n_customers={self.n_customers}"
 
 type Route = list[int]
-type Solution = tuple[list[Route], float]  # (routes, total_distance)
-type Coord = tuple[float, float]
+type Solution = list[Route]
+
+
+################################################
+# EVALUATION
+################################################
 
 def euclid(a: Coord, b: Coord) -> float:
-    return math.hypot(a[0] - b[0], a[1] - b[1])
+    """EUC_2D distance: rounded Euclidean distance per TSPLIB/CVRPLib convention."""
+    return round(math.hypot(a[0] - b[0], a[1] - b[1]))
 
 
 def route_distance(instance: CVRPInstance, route: Route) -> float:
@@ -41,24 +50,82 @@ def route_distance(instance: CVRPInstance, route: Route) -> float:
     return total
 
 
-def solution_distance(instance: CVRPInstance, routes: list[Route]) -> float:
+def solution_distance(instance: CVRPInstance, solution: Solution) -> float:
     """
     Calculate the total distance of a complete solution, which is the sum of distances of all routes.
     """
-    return sum(route_distance(instance, r) for r in routes)
+    return sum(route_distance(instance, r) for r in solution)
 
 
+def is_valid_solution(instance: CVRPInstance, solution: Solution) -> tuple[bool, str]:
+    """Check if a CVRP solution is fully valid.
 
-def evaluate_heuristic(instances: list[CVRPInstance], solver: Callable[[CVRPInstance], list[Route]]) -> dict:
+    Validates:
+      - No empty routes
+      - All customer indices are valid (1..n_customers)
+      - Every customer is visited exactly once
+      - Total demand of each route does not exceed vehicle capacity
+
+    Returns:
+        (is_valid, reason) where reason is empty if valid.
     """
-    Evaluate a heuristic solver on a list of instances, returning average distance and average number of routes.
+    if not solution:
+        return False, "Solution is empty (no routes)"
+
+    visited: set[int] = set()
+
+    for route in solution:
+        if not route:
+            return False, "Route is empty"
+
+        route_demand = 0
+        for node in route:
+            if node < 1 or node > instance.n_customers:
+                return False, f"Invalid customer index {node} (must be 1..{instance.n_customers})"
+            if node in visited:
+                return False, f"Customer {node} is visited more than once"
+            visited.add(node)
+            route_demand += instance.demands[node]
+
+        if route_demand > instance.capacity:
+            return False, (
+                f"Capacity violation: route {route} total demand {route_demand} "
+                f"exceeds capacity {instance.capacity}"
+            )
+
+    all_customers = set(range(1, instance.n_customers + 1))
+    missing = all_customers - visited
+    if missing:
+        return False, f"Missing customers: {sorted(missing)}"
+
+    return True, ""
+
+
+
+def evaluate_solver(instances: list[CVRPInstance], solver: Callable[[CVRPInstance], Solution]) -> dict:
+    """
+    Evaluate a solver on a list of instances, returning average distance and average number of routes.
     """
     total_distance = 0.0
     total_routes = 0
     per_instance: list[dict] = []
 
+    is_valid_solver = True
+    invalid_cases: list[dict] = []
     for inst in instances:
         routes = solver(inst)
+        
+        _valid, reason = is_valid_solution(inst, routes)
+        if not _valid:
+            print(f"Invalid solution: solution {routes} is invalid for instance {inst.name}")
+            print(f"Reason: {reason}")
+            is_valid_solver = False
+            invalid_cases.append({
+                "instance": inst.name,
+                "solution": routes,
+                "reason": reason,
+            })
+        
         dist = solution_distance(inst, routes)
         total_distance += dist
         total_routes += len(routes)
@@ -71,55 +138,10 @@ def evaluate_heuristic(instances: list[CVRPInstance], solver: Callable[[CVRPInst
         )
 
     return {
+        "is_valid_solver": is_valid_solver,
+        "invalid_cases": invalid_cases,
         "avg_distance": total_distance / len(instances),
         "avg_num_routes": total_routes / len(instances),
         "details": per_instance,
     }
 
-
-def generate_synthetic_benchmarks(seed: int = 2026, sizes: list[int] = [20, 50, 100]) -> list[CVRPInstance]:
-    """
-    Generate synthetic CVRP instances with random coordinates and demands.
-    """
-
-    rng = random.Random(seed)
-    instances: list[CVRPInstance] = []
-
-    for idx, n in enumerate(sizes, start=1):
-        coords = [(50.0, 50.0)]
-        demands = [0]
-        for _ in range(n):
-            coords.append((rng.uniform(0, 100), rng.uniform(0, 100)))
-            demands.append(rng.randint(1, 10))
-
-        capacity = max(25, int(sum(demands) / (n / 4.0)))
-        instances.append(
-            CVRPInstance(
-                name=f"SYN-{idx:02d}-N{n}",
-                capacity=capacity,
-                demands=demands,
-                coords=coords,
-            )
-        )
-
-    return instances
-
-
-def check_capacity_constraint(instance: CVRPInstance, routes: list[Route]) -> bool:
-    """检查路由是否满足容量约束
-    
-    Args:
-        instance: CVRP实例
-        routes: 路由列表
-    
-    Returns:
-        是否满足容量约束
-    """
-    for route in routes:
-        total_demand = 0
-        for customer in route:
-            total_demand += instance.demands[customer]
-        if total_demand > instance.capacity:
-            print(f"  容量约束违反: 路由 {route} 的总需求 {total_demand} 超过车辆容量 {instance.capacity}")
-            return False
-    return True

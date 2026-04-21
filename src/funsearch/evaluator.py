@@ -202,13 +202,13 @@ class Evaluator:
         sample, version_generated, self._template, self._function_to_evolve)
 
     scores_per_test = {}
-    for current_input in self._inputs:
+    for idx, current_input in enumerate(self._inputs):
       test_output, runs_ok = self._sandbox.run(
           program, self._function_to_run, current_input, self._timeout_seconds)
       if (runs_ok and not _calls_ancestor(program, self._function_to_evolve)
           and test_output is not None):
         if not isinstance(test_output, (int, float)):
           raise ValueError('@function.run did not return an int/float score.')
-        scores_per_test[current_input] = test_output
+        scores_per_test[idx] = test_output
     if scores_per_test:
       self._database.register_program(new_function, island_id, scores_per_test)

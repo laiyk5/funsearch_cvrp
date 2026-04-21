@@ -17,7 +17,9 @@
 from collections.abc import Mapping, Sequence
 import copy
 import dataclasses
+import pickle
 import time
+from pathlib import Path
 from typing import Any
 
 from absl import logging
@@ -165,6 +167,51 @@ class ProgramsDatabase:
       founder = self._best_program_per_island[founder_island_id]
       founder_scores = self._best_scores_per_test_per_island[founder_island_id]
       self._register_program_in_island(founder, island_id, founder_scores)
+
+  def save(
+      self,
+      path: str | Path,
+      metadata: dict[str, Any] | None = None,
+  ) -> None:
+    """Serialize database state to disk via pickle."""
+    state = {
+        'islands': self._islands,
+        'best_score_per_island': self._best_score_per_island,
+        'best_program_per_island': self._best_program_per_island,
+        'best_scores_per_test_per_island': self._best_scores_per_test_per_island,
+        'last_reset_time': self._last_reset_time,
+        'metadata': metadata or {},
+    }
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'wb') as f:
+      pickle.dump(state, f)
+    logging.info('Database saved to %s', path)
+
+  @classmethod
+  def load(
+      cls,
+      path: str | Path,
+      config: config_lib.ProgramsDatabaseConfig,
+      template: code_manipulation.Program,
+      function_to_evolve: str,
+  ) -> tuple['ProgramsDatabase', dict[str, Any]]:
+    """Restore database state from a pickle file.
+
+    Returns:
+      (database, metadata) where metadata is the dict passed to save().
+    """
+    with open(path, 'rb') as f:
+      state = pickle.load(f)
+
+    db = cls(config, template, function_to_evolve)
+    db._islands = state['islands']
+    db._best_score_per_island = state['best_score_per_island']
+    db._best_program_per_island = state['best_program_per_island']
+    db._best_scores_per_test_per_island = state['best_scores_per_test_per_island']
+    db._last_reset_time = state['last_reset_time']
+    metadata = state.get('metadata', {})
+    logging.info('Database loaded from %s', path)
+    return db, metadata
 
 
 class Island:

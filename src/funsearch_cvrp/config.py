@@ -9,12 +9,14 @@ from typing import Any
 # You can specify the endpoint and prepare all API_KEY
 
 __default_llm_configs: dict[str, Any] = dict(
-    MODEL="qwen3-max-2025-09-23",  # Default model
-    ENDPOINT = "ALI_TONGYI",  # Default endpoint
+    OPNEAI_MODEL="qwen3-max-2025-09-23",  # Default model
     OPENAI_API_KEY="",    # at least one of these API_KEYs must be set
-    DASHSCOPE_API_KEY="",
     OPENAI_BASE_URL="", # OPENAI_BASE_URL is automatically determined by the model name, but can be overridden if needed
     LLM_TEMPERATURE=0.7,
+)
+
+__default_cvrp_configs: dict[str, Any] = dict(
+    DATASET_FOLDER="data/cvrplib/A",  # Default dataset folder
 )
 
 __default_search_configs: dict[str, Any] = dict(
@@ -35,6 +37,7 @@ config = configparser.ConfigParser()
 config.read_dict(
     {
         "LLM": __default_llm_configs,
+        "CVRP": __default_cvrp_configs,
         "SEARCH": __default_search_configs
     }
 )

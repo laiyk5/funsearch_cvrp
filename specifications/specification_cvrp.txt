@@ -1,0 +1,171 @@
+"""FunSearch specification for the Capacitated Vehicle Routing Problem (CVRP).
+
+The solver builds routes using a greedy constructive heuristic. At each step,
+the next customer is chosen by the evolved `priority()` function. FunSearch
+maximizes the score returned by `evaluate()`, so valid solutions return
+negative total distance and invalid solutions return a large penalty.
+
+NOTE: FunSearch only propagates a single scalar score per test input back to
+the LLM. There is no structured feedback channel (e.g. "capacity violated").
+All diagnostic information must be encoded into that scalar.
+"""
+from __future__ import annotations
+import math
+
+
+def _euclid(a: tuple[float, float], b: tuple[float, float]) -> float:
+  """EUC_2D distance: rounded Euclidean per TSPLIB convention."""
+  return round(math.hypot(a[0] - b[0], a[1] - b[1]))
+
+
+def _route_distance(coords: list[tuple[float, float]], route: list[int]) -> float:
+  """Distance of a single route including return to depot (node 0)."""
+  if not route:
+    return 0.0
+  total = 0.0
+  prev = 0
+  for node in route:
+    total += _euclid(coords[prev], coords[node])
+    prev = node
+  total += _euclid(coords[prev], coords[0])
+  return total
+
+
+def solve(instance: dict) -> list[list[int]]:
+  """Build CVRP routes using a greedy heuristic guided by `priority()`.
+
+  Args:
+    instance: dict with keys:
+      - 'name': str
+      - 'capacity': int
+      - 'demands': list[int] where demands[0] == 0 (depot)
+      - 'coords': list[tuple[float, float]] where coords[0] is the depot
+      - 'n_customers': int
+
+  Returns:
+    List of routes, each route is a list of customer indices (1-based).
+  """
+  n_customers = instance['n_customers']
+  capacity = instance['capacity']
+  demands = instance['demands']
+  coords = instance['coords']
+
+  unserved = set(range(1, n_customers + 1))
+  routes: list[list[int]] = []
+
+  while unserved:
+    route: list[int] = []
+    current = 0          # depot
+    cap_left = capacity
+    route_demand = 0
+
+    while True:
+      feasible = [c for c in unserved if demands[c] <= cap_left]
+      if not feasible:
+        break
+
+      best = max(
+        feasible,
+        key=lambda c: priority(
+          current_node=current,
+          candidate=c,
+          instance=instance,
+          remaining_capacity=cap_left,
+          route=route,
+          route_demand=route_demand,
+          unserved=unserved,
+        ),
+      )
+      route.append(best)
+      unserved.remove(best)
+      cap_left -= demands[best]
+      route_demand += demands[best]
+      current = best
+
+    # If we couldn't fit any customer into a fresh route, the instance
+    # is infeasible (some demand > capacity). Stop to avoid infinite loop.
+    if not route:
+      break
+
+    routes.append(route)
+
+  return routes
+
+
+@funsearch.run
+def evaluate(instance: dict) -> float:
+  """Score a solution. Higher is better (FunSearch maximizes).
+
+  Valid solutions:  return -total_distance
+  Invalid solutions: return a large negative penalty so they are never
+                     selected as "best".
+
+  Validation checks:
+    - every customer visited exactly once
+    - no route exceeds vehicle capacity
+    - no empty routes
+  """
+  routes = solve(instance)
+  coords = instance['coords']
+  demands = instance['demands']
+  capacity = instance['capacity']
+  n_customers = instance['n_customers']
+
+  # --- validation ---------------------------------------------------------
+  if not routes:
+    return -1e9
+
+  visited: set[int] = set()
+  for route in routes:
+    if not route:
+      return -1e9
+    route_demand = 0
+    for node in route:
+      if node < 1 or node > n_customers:
+        return -1e9
+      if node in visited:
+        return -1e9
+      visited.add(node)
+      route_demand += demands[node]
+    if route_demand > capacity:
+      return -1e9
+
+  all_customers = set(range(1, n_customers + 1))
+  if visited != all_customers:
+    return -1e9
+  # ------------------------------------------------------------------------
+
+  total = sum(_route_distance(coords, r) for r in routes)
+  return -total
+
+
+@funsearch.evolve
+def priority(
+  current_node: int,
+  candidate: int,
+  instance: dict,
+  remaining_capacity: int,
+  route: list[int],
+  route_demand: int,
+  unserved: set[int],
+) -> float:
+  """Score a candidate customer for the greedy route builder.
+
+  Higher score = more likely `candidate` is chosen as the next stop.
+
+  Args:
+    current_node: The node the vehicle is currently at.
+    candidate: The customer under consideration.
+    instance: CVRP instance dict with 'coords', 'demands', 'capacity',
+      'n_customers'.
+    remaining_capacity: Unused capacity on the current vehicle.
+    route: Customers already on the current partial route.
+    route_demand: Sum of demands of customers already on `route`.
+    unserved: Set of customers not yet assigned to any route.
+
+  Returns:
+    A float priority.  Higher is better.
+  """
+  # Baseline: nearest-neighbor (prefer closer customers)
+  d_cur = _euclid(instance['coords'][current_node], instance['coords'][candidate])
+  return -d_cur

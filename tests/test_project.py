@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 from funsearch_cvrp.cvrp.baselines import clarke_wright_savings_heuristic, with_two_opt
-from funsearch_cvrp.cvrp.core import evaluate_heuristic, generate_synthetic_benchmarks, nearest_neighbor_heuristic
+from funsearch_cvrp.cvrp.core import evaluate_heuristic, nearest_neighbor_heuristic
+from funsearch_cvrp.cvrp.utils import generate_synthetic_benchmarks
 from funsearch_cvrp.search import SearchConfig, run_sample_efficient_search
 
 
