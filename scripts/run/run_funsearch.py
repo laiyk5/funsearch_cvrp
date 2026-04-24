@@ -1,4 +1,4 @@
-"""Run FunSearch on a specification file."""
+"""Run FunSearch with a module-based CVRP specification."""
 
 from __future__ import annotations
 
@@ -10,23 +10,24 @@ import json
 import logging
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+import inspect
 
-# Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.funsearch import code_manipulation, config as config_lib, evaluator, funsearch, programs_database, sampler
 from src.funsearch_cvrp.config import config as project_config
-from src.funsearch_cvrp.cvrp.core import CVRPInstance
+from src.funsearch_cvrp.cvrp.core import CVRPInstance, make_greedy_solver, gap_score, is_valid_solution, solution_distance
 from src.funsearch_cvrp.cvrp.io import load_cvrplib_folder
-from src.funsearch_cvrp.utils.output_manager import get_output_dir, update_meta
+from src.funsearch_cvrp.utils.output_manager import get_output_dir
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+_logger = logging.getLogger('funsearch')
 
 
 # ---------------------------------------------------------------------------
-# Windows-compatible sandbox
+# Cross-platform sandbox
 # ---------------------------------------------------------------------------
 
 class CrossPlatformSandbox(evaluator.Sandbox):
@@ -34,14 +35,16 @@ class CrossPlatformSandbox(evaluator.Sandbox):
 
     def run(
         self,
-        program: str,
-        function_to_run: str,
+        evolved_fn_code: str,
+        function_name: str,
+        evaluate_fn: Callable,
         test_input: Any,
         _timeout_seconds: int,
     ) -> tuple[Any, bool]:
         try:
-            ast.parse(program)
-        except SyntaxError:
+            ast.parse(evolved_fn_code)
+        except SyntaxError as e:
+            _logger.debug("Sandbox syntax error in\n%s\n--> %s", evolved_fn_code, e)
             return None, False
 
         namespace = {}
@@ -49,25 +52,25 @@ class CrossPlatformSandbox(evaluator.Sandbox):
         with contextlib.redirect_stdout(io.StringIO()):
             with contextlib.redirect_stderr(err_stream):
                 try:
-                    exec(program, namespace)
+                    exec(evolved_fn_code, namespace)
                 except Exception as e:
-                    logging.debug("Sandbox exec error: %s", e)
+                    _logger.debug("Sandbox exec error: %s", e)
                     return None, False
 
-                if function_to_run not in namespace:
-                    logging.debug("Sandbox: function '%s' not found", function_to_run)
+                if function_name not in namespace:
+                    _logger.debug("Sandbox: function '%s' not found", function_name)
                     return None, False
 
-                func = namespace[function_to_run]
+                func = namespace[function_name]
                 try:
-                    result = func(test_input)
+                    result = evaluate_fn(test_input, func)
                 except Exception as e:
-                    logging.debug("Sandbox function error: %s", e)
+                    _logger.debug("Sandbox evaluation error: %s", e)
                     return None, False
 
         stderr_output = err_stream.getvalue()
         if stderr_output:
-            logging.debug("Sandbox stderr: %s", stderr_output)
+            _logger.debug("Sandbox stderr: %s", stderr_output)
 
         return result, True
 
@@ -88,22 +91,27 @@ class LimitedSampler(sampler.Sampler):
         checkpoint_path: Path | None = None,
         checkpoint_every: int = 0,
         start_iteration: int = 0,
-        history_path: Path | None = None,
+        database_log_path: Path | None = None,
+        log_roll_every: int = 0,
+        log_dir: Path | None = None,
     ) -> None:
         super().__init__(database, evaluators, llm)
         self._max_iterations = max_iterations
         self._iteration = start_iteration
         self._checkpoint_path = checkpoint_path
         self._checkpoint_every = checkpoint_every
-        self._history_path = history_path
+        self._database_log_path = database_log_path
+        self._log_roll_every = log_roll_every
+        self._log_dir = log_dir
+        self._last_rolled_block = start_iteration // log_roll_every if log_roll_every else 0
 
     @property
     def iteration(self) -> int:
         return self._iteration
 
-    def _log_history(self) -> None:
-        """Record current database state to history file."""
-        if self._history_path is None:
+    def _log_database(self) -> None:
+        """Record current database state to database.jsonl."""
+        if self._database_log_path is None:
             return
         record = {
             "iteration": self._iteration,
@@ -117,22 +125,91 @@ class LimitedSampler(sampler.Sampler):
             ),
             "timestamp": time.time(),
         }
-        with open(self._history_path, "a", encoding="utf-8") as f:
+        with open(self._database_log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+
+    def _maybe_roll_log(self) -> None:
+        """Archive evolution.log and eval_history every N iterations."""
+        if not self._log_roll_every or not self._log_dir:
+            return
+        block = self._iteration // self._log_roll_every
+        if block <= self._last_rolled_block:
+            return
+        self._last_rolled_block = block
+
+        prev_block = block - 1
+        start_it = prev_block * self._log_roll_every
+        end_it = start_it + self._log_roll_every - 1
+
+        # Roll evolution.log
+        logs_dir = self._log_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        current_log = logs_dir / "evolution.log"
+        archived_log = logs_dir / f"evolution_iter_{start_it:06d}_{end_it:06d}.log"
+
+        funsearch_logger = logging.getLogger('funsearch')
+        for h in list(funsearch_logger.handlers):
+            if isinstance(h, logging.FileHandler):
+                funsearch_logger.removeHandler(h)
+                h.flush()
+                h.close()
+        if current_log.exists():
+            current_log.rename(archived_log)
+        new_h = logging.FileHandler(current_log)
+        new_h.setLevel(logging.DEBUG)
+        new_h.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+        funsearch_logger.addHandler(new_h)
+
+        # Roll eval_history.jsonl
+        eval_dir = self._log_dir / "eval"
+        eval_dir.mkdir(parents=True, exist_ok=True)
+        current_eval = eval_dir / "eval.jsonl"
+        archived_eval = eval_dir / f"eval_iter_{start_it:06d}_{end_it:06d}.jsonl"
+
+        if current_eval.exists():
+            current_eval.rename(archived_eval)
+        for e in self._evaluators:
+            e._eval_history_path = current_eval
+
+        # Roll database_log.jsonl
+        db_dir = self._log_dir / "database"
+        db_dir.mkdir(parents=True, exist_ok=True)
+        current_db = db_dir / "database.jsonl"
+        archived_db = db_dir / f"database_iter_{start_it:06d}_{end_it:06d}.jsonl"
+
+        if current_db.exists():
+            current_db.rename(archived_db)
+        self._database_log_path = current_db
+
+        # Roll sampler_log.jsonl
+        sampler_dir = self._log_dir / "sampler"
+        sampler_dir.mkdir(parents=True, exist_ok=True)
+        current_sampler = sampler_dir / "sampler.jsonl"
+        archived_sampler = sampler_dir / f"sampler_iter_{start_it:06d}_{end_it:06d}.jsonl"
+
+        if current_sampler.exists():
+            current_sampler.rename(archived_sampler)
+        self._llm._sampler_log_path = current_sampler
+
+        _logger.info("Rolled evolution.log -> %s", archived_log.name)
 
     def sample(self) -> None:
         while self._iteration < self._max_iterations:
+            generation_time = time.time()
             prompt = self._database.get_prompt()
             samples = self._llm.draw_samples(prompt.code)
             for sample in samples:
                 if self._iteration >= self._max_iterations:
                     return
                 chosen_evaluator = self._evaluators[self._iteration % len(self._evaluators)]
-                chosen_evaluator.analyse(
-                    sample, prompt.island_id, prompt.version_generated
+                scores = chosen_evaluator.analyse(
+                    sample, prompt.island_id, prompt.version_generated,
+                    generation_time=generation_time,
+                    iteration=self._iteration,
                 )
                 self._iteration += 1
-                self._log_history()
+                self._log_database()
+                self._maybe_roll_log()
 
                 if self._checkpoint_every > 0 and self._checkpoint_path:
                     if self._iteration % self._checkpoint_every == 0:
@@ -140,7 +217,7 @@ class LimitedSampler(sampler.Sampler):
                             self._checkpoint_path,
                             metadata={"completed_iterations": self._iteration},
                         )
-                        logging.info(
+                        _logger.info(
                             "Checkpoint saved at iteration %d/%d",
                             self._iteration,
                             self._max_iterations,
@@ -154,11 +231,13 @@ class LimitedSampler(sampler.Sampler):
 class MockLLM(sampler.LLM):
     """Mock LLM for testing FunSearch pipeline without API calls."""
 
-    def __init__(self, samples_per_prompt: int) -> None:
-        super().__init__(samples_per_prompt)
+    def __init__(self, samples_per_prompt: int, *, sampler_log_path: Path | None = None) -> None:
+        super().__init__(samples_per_prompt, sampler_log_path=sampler_log_path)
         self._count = 0
 
-    def _draw_sample(self, _prompt: str) -> str:
+    def _draw_sample(self, prompt: str) -> str:
+        import time as _time
+        generation_time = _time.time()
         self._count += 1
         variants = [
             "    return 1.0",
@@ -170,7 +249,19 @@ class MockLLM(sampler.LLM):
             "    return float(n) / (w + 1)",
             "    return -sum(el)",
         ]
-        return variants[self._count % len(variants)]
+        code = variants[self._count % len(variants)]
+        _logger.debug('MOCK LLM PROMPT:\n%s', prompt)
+        _logger.debug('MOCK LLM RESPONSE:\n%s', code)
+        self._write_sampler_log({
+            "generation_time": generation_time,
+            "model": "mock",
+            "temperature": 0,
+            "max_tokens": 0,
+            "prompt": prompt,
+            "raw_response": code,
+            "extracted_code": code,
+        })
+        return code
 
 
 # ---------------------------------------------------------------------------
@@ -231,36 +322,72 @@ def save_funsearch_results(
     results_file = output_dir / "funsearch_results.json"
     with open(results_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
-    logging.info(f"Results saved to {results_file}")
+    _logger.info(f"Results saved to {results_file}")
 
     if best_programs:
         best = max(best_programs, key=lambda p: p["best_score"])
         best_code_file = output_dir / "best_program.py"
         with open(best_code_file, "w", encoding="utf-8") as f:
             f.write(best["program"])
-        logging.info(f"Best program saved to {best_code_file}")
+        _logger.info(f"Best program saved to {best_code_file}")
 
 
 # ---------------------------------------------------------------------------
-# CVRP instance helpers
+# CVRP evaluation harness (gap-based)
 # ---------------------------------------------------------------------------
 
-def instance_to_dict(inst: CVRPInstance) -> dict:
-    """Convert a CVRPInstance to the dict format expected by the spec."""
-    return {
-        "name": inst.name,
-        "capacity": inst.capacity,
-        "demands": inst.demands,
-        "coords": inst.coords,
-        "n_customers": inst.n_customers,
-    }
+def evaluate_cvrp(instance_and_optimal: tuple[CVRPInstance, float], priority_fn) -> float:
+    """Evaluate one CVRP instance using the evolved priority function.
+
+    Returns:
+        ``-gap`` where gap = (distance - optimal) / optimal.
+        Higher is better (FunSearch maximizes).
+        Invalid solutions return a large negative penalty.
+    """
+    instance, optimal = instance_and_optimal
+    solver = make_greedy_solver(priority_fn)
+    routes = solver(instance)
+
+    valid, _ = is_valid_solution(instance, routes)
+    if not valid:
+        return -1e9
+
+    dist = solution_distance(instance, routes)
+    gap = (dist - optimal) / optimal
+    return -gap
 
 
-def load_cvrp_inputs(dataset_folder: str | None = None, limit: int | None = None) -> list[dict]:
-    """Load CVRP instances from the configured dataset folder."""
-    folder = dataset_folder or project_config.get("CVRP", "dataset_folder", fallback="data/cvrplib/A")
-    instances_sols = load_cvrplib_folder(folder, limit=limit)
-    return [instance_to_dict(inst) for inst, _, _ in instances_sols]
+PROMPT = """You are improving a priority function for a Capacitated Vehicle Routing Problem (CVRP) solver.
+
+The solver uses a greedy constructive heuristic. At each step it builds a route by choosing
+the next customer with the highest priority score returned by your function.
+
+The function signature is:
+
+def priority(current_node, candidate, instance, remaining_capacity, route, route_demand, unserved) -> float:
+    ...
+
+Where:
+- current_node: int — the node the vehicle is at now (0 = depot)
+- candidate: int — the customer under consideration
+- instance: CVRPInstance with attributes:
+    - coords: list[(x, y)] — 2-D coordinates, index 0 is the depot
+    - demands: list[int] — demand per node, demands[0] = 0
+    - capacity: int — vehicle capacity
+    - n_customers: int — number of customers
+- remaining_capacity: int — unused capacity on the current vehicle
+- route: list[int] — customers already assigned to the current route
+- route_demand: int — sum of demands already on the current route
+- unserved: set[int] — customers not yet in any route
+
+Higher return value = higher priority for `candidate` to be chosen next.
+
+Tips:
+- Prefer closer customers (lower Euclidean distance from current_node).
+- Consider remaining capacity vs. candidate demand.
+- Consider the distance from candidate back to the depot.
+- Balance short-term gains with long-term route efficiency.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -273,19 +400,18 @@ def build_config(args: argparse.Namespace) -> config_lib.Config:
         num_islands=args.num_islands,
         functions_per_prompt=args.functions_per_prompt,
         reset_period=args.reset_period,
+        score_bucket_precision=2,  # bucket gap scores to 2 decimal places
     )
 
     if args.mock_llm:
         llm_config = None
     else:
-        # Read LLM settings from project config
         model = project_config.get("LLM", "openai_model", fallback="gpt-4")
         api_key = project_config.get("LLM", "openai_api_key", fallback="")
         base_url = project_config.get("LLM", "openai_base_url", fallback="")
         temperature = project_config.getfloat("LLM", "llm_temperature", fallback=0.7)
         max_tokens = project_config.getint("SEARCH", "llm_max_tokens", fallback=2000)
 
-        # CLI overrides
         if args.model:
             model = args.model
         if args.temperature is not None:
@@ -311,18 +437,7 @@ def build_config(args: argparse.Namespace) -> config_lib.Config:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run FunSearch on a specification file")
-    parser.add_argument(
-        "--spec",
-        default="specifications/specification_nonsymmetric_admissible_set.txt",
-        help="Path to the FunSearch specification file",
-    )
-    parser.add_argument(
-        "--inputs",
-        nargs="+",
-        default=None,
-        help="Test inputs (e.g., '8,3' '9,3'). Defaults to standard admissible set test cases.",
-    )
+    parser = argparse.ArgumentParser(description="Run FunSearch on CVRP")
     parser.add_argument(
         "--iterations",
         type=int,
@@ -411,55 +526,71 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Load specification
-    spec_path = Path(args.spec)
-    if not spec_path.exists():
-        raise FileNotFoundError(f"Specification file not found: {spec_path}")
-    specification = spec_path.read_text(encoding="utf-8")
+    # Import the specification module
+    from specifications import cvrp_spec as spec_module
 
-    # Determine whether this is a CVRP spec (heuristic) or admissible-set spec
-    is_cvrp_spec = "cvrp" in spec_path.name.lower()
-
-    # Parse inputs
-    if is_cvrp_spec:
-        inputs = load_cvrp_inputs(args.dataset_folder, limit=args.limit_instances or 3)
-        logging.info(f"Loaded {len(inputs)} CVRP instances from dataset")
-    elif args.inputs:
-        inputs = []
-        for inp in args.inputs:
-            parts = [int(x.strip()) for x in inp.split(",")]
-            inputs.append(tuple(parts))
-    else:
-        inputs = [(8, 3), (9, 3), (10, 3), (11, 3)]
-
-    logging.info(f"Specification: {spec_path}")
-    logging.info(f"Test inputs: {inputs}")
-    logging.info(f"Iterations: {args.iterations}")
-
-    # Extract function names
-    function_to_evolve, function_to_run = funsearch._extract_function_names(specification)
-    logging.info(f"Evolving: {function_to_evolve}, Running: {function_to_run}")
+    # Load instances with known optima
+    folder = args.dataset_folder or project_config.get("CVRP", "dataset_folder", fallback="data/cvrplib/A")
+    instances_sols = load_cvrplib_folder(folder, limit=args.limit_instances)
+    inputs = [(inst, cost) for inst, _, cost in instances_sols]
+    _logger.info(f"Loaded {len(inputs)} CVRP instances with known optima from {folder}")
 
     # Build config
     config = build_config(args)
 
-    # Determine output directory early (needed for checkpoint / history paths)
+    # Determine output directory.  When resuming without an explicit output-dir,
+    # reuse the checkpoint's directory so that history, logs, and best-program
+    # snapshots continue in the same place.
     if args.output_dir:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+    elif args.resume:
+        output_dir = Path(args.resume).resolve().parent
     else:
         output_dir = get_output_dir("run_funsearch", args={
-            "specification": str(spec_path),
             "iterations": args.iterations,
             "mock_llm": args.mock_llm,
             "model": config.llm.model if config.llm else "mock",
         })
 
-    checkpoint_path = output_dir / "checkpoint.pkl"
-    history_path = output_dir / "history.jsonl"
+    # Update latest symlink if we are inside an "outputs" tree.
+    run_dir = output_dir.parent
+    if run_dir.parent.name == "outputs":
+        latest = run_dir.parent / "latest"
+        if latest.is_symlink() or latest.exists():
+            latest.unlink()
+        latest.symlink_to(run_dir.resolve(), target_is_directory=True)
 
-    # Parse template
-    template = code_manipulation.text_to_program(specification)
+    checkpoint_path = output_dir / "checkpoint.pkl"
+    _db_dir = output_dir / "database"
+    _db_dir.mkdir(parents=True, exist_ok=True)
+    database_log_path = _db_dir / "database.jsonl"
+    best_program_path = output_dir / "best_program.py"
+    _eval_dir = output_dir / "eval"
+    _eval_dir.mkdir(parents=True, exist_ok=True)
+    eval_history_path = _eval_dir / "eval.jsonl"
+    _sampler_dir = output_dir / "sampler"
+    _sampler_dir.mkdir(parents=True, exist_ok=True)
+    sampler_log_path = _sampler_dir / "sampler.jsonl"
+
+    # Set up named logger with file + console handlers
+    _logger.setLevel(logging.DEBUG)
+    _logger.propagate = False
+    _logs_dir = output_dir / 'logs'
+    _logs_dir.mkdir(parents=True, exist_ok=True)
+    _fh = logging.FileHandler(_logs_dir / 'evolution.log')
+    _fh.setLevel(logging.DEBUG)
+    _fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    _sh = logging.StreamHandler()
+    _sh.setLevel(logging.WARNING)
+    _sh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    _logger.addHandler(_fh)
+    _logger.addHandler(_sh)
+
+    # Build template from the evolve function
+    source = inspect.getsource(spec_module.priority)
+    template = code_manipulation.text_to_program(source)
+    function_to_evolve = "priority"
 
     # Create or resume database
     completed_iterations = 0
@@ -467,18 +598,21 @@ def main() -> None:
         resume_path = Path(args.resume)
         if not resume_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {resume_path}")
-        logging.info(f"Resuming from checkpoint: {resume_path}")
+        _logger.info(f"Resuming from checkpoint: {resume_path}")
         database, metadata = programs_database.ProgramsDatabase.load(
             resume_path,
             config.programs_database,
             template,
             function_to_evolve,
         )
+        # Re-enable best-program snapshotting for the resumed session.
+        database._best_program_path = best_program_path
         completed_iterations = metadata.get("completed_iterations", 0)
-        logging.info(f"Resuming from iteration {completed_iterations}/{args.iterations}")
+        _logger.info(f"Resuming from iteration {completed_iterations}/{args.iterations}")
     else:
         database = programs_database.ProgramsDatabase(
-            config.programs_database, template, function_to_evolve
+            config.programs_database, template, function_to_evolve,
+            best_program_path=best_program_path,
         )
 
     # Create sandbox
@@ -491,23 +625,24 @@ def main() -> None:
             database,
             template,
             function_to_evolve,
-            function_to_run,
+            evaluate_cvrp,
             inputs,
             sandbox=sandbox,
+            eval_history_path=eval_history_path,
         ))
 
-    # Send initial implementation only on fresh start
+    # Send initial implementation
     if not args.resume:
         initial = template.get_function(function_to_evolve).body
         evaluators[0].analyse(initial, island_id=None, version_generated=None)
 
     # Create LLM
     if args.mock_llm:
-        logging.info("Using mock LLM (no API calls)")
-        llm = MockLLM(samples_per_prompt=config.samples_per_prompt)
+        _logger.info("Using mock LLM (no API calls)")
+        llm = MockLLM(samples_per_prompt=config.samples_per_prompt, sampler_log_path=sampler_log_path)
     else:
         if not config.llm or not config.llm.api_key:
-            logging.error(
+            _logger.error(
                 "No API key configured. Set openai_api_key in config.ini "
                 "or use --mock-llm for testing."
             )
@@ -519,8 +654,10 @@ def main() -> None:
             max_tokens=config.llm.max_tokens,
             api_key=config.llm.api_key,
             base_url=config.llm.base_url,
+            prompt=PROMPT,
+            sampler_log_path=sampler_log_path,
         )
-        logging.info(f"Using OpenAI LLM: {config.llm.model}")
+        _logger.info(f"Using OpenAI LLM: {config.llm.model}")
 
     # Run with iteration limit
     limited_sampler = LimitedSampler(
@@ -531,14 +668,16 @@ def main() -> None:
         checkpoint_path=checkpoint_path,
         checkpoint_every=args.checkpoint_every,
         start_iteration=completed_iterations,
-        history_path=history_path,
+        database_log_path=database_log_path,
+        log_roll_every=1000,
+        log_dir=output_dir,
     )
 
-    logging.info("Starting FunSearch...")
+    _logger.info("Starting FunSearch...")
     start_time = time.time()
     limited_sampler.sample()
     duration = time.time() - start_time
-    logging.info(f"FunSearch completed in {duration:.1f}s")
+    _logger.info(f"FunSearch completed in {duration:.1f}s")
 
     # Final checkpoint
     database.save(
@@ -556,7 +695,7 @@ def main() -> None:
         llm_calls=limited_sampler._iteration,
     )
 
-    logging.info(f"All done. Output directory: {output_dir}")
+    _logger.info(f"All done. Output directory: {output_dir}")
 
 
 if __name__ == "__main__":

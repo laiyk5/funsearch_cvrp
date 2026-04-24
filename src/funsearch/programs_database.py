@@ -22,6 +22,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import logging as _stdlib_logging
+
 from absl import logging
 import numpy as np
 import scipy
@@ -53,9 +55,19 @@ def _reduce_score(scores_per_test: ScoresPerTest) -> float:
   return scores_per_test[list(scores_per_test.keys())[-1]]
 
 
-def _get_signature(scores_per_test: ScoresPerTest) -> Signature:
-  """Represents test scores as a canonical signature."""
-  return tuple(scores_per_test[k] for k in sorted(scores_per_test.keys()))
+def _get_signature(scores_per_test: ScoresPerTest, precision: int | None = None) -> Signature:
+  """Represents test scores as a canonical signature.
+
+  Args:
+    scores_per_test: mapping from test key to score.
+    precision: if given, round each score to this many decimal places before
+      forming the signature.  This lets programs with similar (but not
+      identical) per-test performance share a cluster.
+  """
+  raw = [scores_per_test[k] for k in sorted(scores_per_test.keys())]
+  if precision is not None:
+    raw = [round(s, precision) for s in raw]
+  return tuple(raw)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,10 +94,14 @@ class ProgramsDatabase:
       config: config_lib.ProgramsDatabaseConfig,
       template: code_manipulation.Program,
       function_to_evolve: str,
+      *,
+      best_program_path: str | Path | None = None,
   ) -> None:
     self._config: config_lib.ProgramsDatabaseConfig = config
     self._template: code_manipulation.Program = template
     self._function_to_evolve: str = function_to_evolve
+    self._best_program_path: Path | None = (
+        Path(best_program_path) if best_program_path else None)
 
     # Initialize empty islands.
     self._islands: list[Island] = []
@@ -93,7 +109,8 @@ class ProgramsDatabase:
       self._islands.append(
           Island(template, function_to_evolve, config.functions_per_prompt,
                  config.cluster_sampling_temperature_init,
-                 config.cluster_sampling_temperature_period))
+                 config.cluster_sampling_temperature_period,
+                 config.score_bucket_precision))
     self._best_score_per_island: list[float] = (
         [-float('inf')] * config.num_islands)
     self._best_program_per_island: list[code_manipulation.Function | None] = (
@@ -122,7 +139,23 @@ class ProgramsDatabase:
       self._best_program_per_island[island_id] = program
       self._best_scores_per_test_per_island[island_id] = scores_per_test
       self._best_score_per_island[island_id] = score
-      logging.info('Best score of island %d increased to %s', island_id, score)
+      signature = tuple(round(scores_per_test[k], self._config.score_bucket_precision)
+                        for k in sorted(scores_per_test.keys()))
+      _stdlib_logging.getLogger('funsearch').warning(
+          'NEW BEST island=%d score=%.4f sig=%s\n%s',
+          island_id, score, signature, program.body)
+      # Persist best program immediately so it survives crashes.
+      if self._best_program_path is not None:
+        best = max(
+            (p for p in self._best_program_per_island if p is not None),
+            key=lambda p: self._best_score_per_island[
+                self._best_program_per_island.index(p)],
+            default=None,
+        )
+        if best is not None:
+          self._best_program_path.parent.mkdir(parents=True, exist_ok=True)
+          with open(self._best_program_path, 'w', encoding='utf-8') as f:
+            f.write(str(best))
 
   def register_program(
       self,
@@ -161,12 +194,14 @@ class ProgramsDatabase:
           self._function_to_evolve,
           self._config.functions_per_prompt,
           self._config.cluster_sampling_temperature_init,
-          self._config.cluster_sampling_temperature_period)
+          self._config.cluster_sampling_temperature_period,
+          self._config.score_bucket_precision)
       self._best_score_per_island[island_id] = -float('inf')
       founder_island_id = np.random.choice(keep_islands_ids)
       founder = self._best_program_per_island[founder_island_id]
       founder_scores = self._best_scores_per_test_per_island[founder_island_id]
       self._register_program_in_island(founder, island_id, founder_scores)
+    _stdlib_logging.getLogger('funsearch').warning('Islands reset. Reset: %s', list(reset_islands_ids))
 
   def save(
       self,
@@ -185,7 +220,7 @@ class ProgramsDatabase:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'wb') as f:
       pickle.dump(state, f)
-    logging.info('Database saved to %s', path)
+    _stdlib_logging.getLogger('funsearch').info('Database saved to %s', path)
 
   @classmethod
   def load(
@@ -203,14 +238,14 @@ class ProgramsDatabase:
     with open(path, 'rb') as f:
       state = pickle.load(f)
 
-    db = cls(config, template, function_to_evolve)
+    db = cls(config, template, function_to_evolve, best_program_path=None)
     db._islands = state['islands']
     db._best_score_per_island = state['best_score_per_island']
     db._best_program_per_island = state['best_program_per_island']
     db._best_scores_per_test_per_island = state['best_scores_per_test_per_island']
     db._last_reset_time = state['last_reset_time']
     metadata = state.get('metadata', {})
-    logging.info('Database loaded from %s', path)
+    _stdlib_logging.getLogger('funsearch').info('Database loaded from %s', path)
     return db, metadata
 
 
@@ -224,6 +259,7 @@ class Island:
       functions_per_prompt: int,
       cluster_sampling_temperature_init: float,
       cluster_sampling_temperature_period: int,
+      score_bucket_precision: int | None = None,
   ) -> None:
     self._template: code_manipulation.Program = template
     self._function_to_evolve: str = function_to_evolve
@@ -231,6 +267,7 @@ class Island:
     self._cluster_sampling_temperature_init = cluster_sampling_temperature_init
     self._cluster_sampling_temperature_period = (
         cluster_sampling_temperature_period)
+    self._score_bucket_precision = score_bucket_precision
 
     self._clusters: dict[Signature, Cluster] = {}
     self._num_programs: int = 0
@@ -241,7 +278,7 @@ class Island:
       scores_per_test: ScoresPerTest,
   ) -> None:
     """Stores a program on this island, in its appropriate cluster."""
-    signature = _get_signature(scores_per_test)
+    signature = _get_signature(scores_per_test, self._score_bucket_precision)
     if signature not in self._clusters:
       score = _reduce_score(scores_per_test)
       self._clusters[signature] = Cluster(score, program)
@@ -277,7 +314,7 @@ class Island:
 
     indices = np.argsort(scores)
     sorted_implementations = [implementations[i] for i in indices]
-    version_generated = len(sorted_implementations) + 1
+    version_generated = len(sorted_implementations)
     return self._generate_prompt(sorted_implementations), version_generated
 
   def _generate_prompt(

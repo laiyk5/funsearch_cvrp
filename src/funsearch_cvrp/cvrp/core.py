@@ -102,6 +102,68 @@ def is_valid_solution(instance: CVRPInstance, solution: Solution) -> tuple[bool,
 
 
 
+def make_greedy_solver(priority_fn: Callable[..., float]) -> Callable[[CVRPInstance], Solution]:
+    """Build a greedy constructive solver using `priority_fn`.
+
+    Args:
+        priority_fn: ``(current_node, candidate, instance, remaining_capacity,
+                       route, route_demand, unserved) -> float``.
+        Higher is better.
+
+    Returns:
+        ``solver(instance) -> Solution``
+    """
+    def solver(instance: CVRPInstance) -> Solution:
+        n_customers = instance.n_customers
+        capacity = instance.capacity
+        demands = instance.demands
+        unserved = set(range(1, n_customers + 1))
+        routes: Solution = []
+
+        while unserved:
+            route: Route = []
+            current = 0
+            cap_left = capacity
+            route_demand = 0
+
+            while True:
+                feasible = [c for c in unserved if demands[c] <= cap_left]
+                if not feasible:
+                    break
+
+                best = max(
+                    feasible,
+                    key=lambda c: priority_fn(
+                        current_node=current,
+                        candidate=c,
+                        instance=instance,
+                        remaining_capacity=cap_left,
+                        route=route,
+                        route_demand=route_demand,
+                        unserved=unserved,
+                    ) or 0.0,
+                )
+                route.append(best)
+                unserved.remove(best)
+                cap_left -= demands[best]
+                route_demand += demands[best]
+                current = best
+
+            if not route:
+                break  # infeasible (demand > capacity)
+
+            routes.append(route)
+
+        return routes
+
+    return solver
+
+
+def gap_score(distance: float, optimal: float) -> float:
+    """Return percentage gap: (distance - optimal) / optimal."""
+    return (distance - optimal) / optimal
+
+
 def evaluate_solver(instances: list[CVRPInstance], solver: Callable[[CVRPInstance], Solution]) -> dict:
     """
     Evaluate a solver on a list of instances, returning average distance and average number of routes.
@@ -114,7 +176,7 @@ def evaluate_solver(instances: list[CVRPInstance], solver: Callable[[CVRPInstanc
     invalid_cases: list[dict] = []
     for inst in instances:
         routes = solver(inst)
-        
+
         _valid, reason = is_valid_solution(inst, routes)
         if not _valid:
             print(f"Invalid solution: solution {routes} is invalid for instance {inst.name}")
@@ -125,7 +187,7 @@ def evaluate_solver(instances: list[CVRPInstance], solver: Callable[[CVRPInstanc
                 "solution": routes,
                 "reason": reason,
             })
-        
+
         dist = solution_distance(inst, routes)
         total_distance += dist
         total_routes += len(routes)

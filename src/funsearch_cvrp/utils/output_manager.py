@@ -31,7 +31,9 @@ def _git(*args: str) -> str:
 
 
 def get_git_commit_hash(short: bool = True) -> str:
-    return _git("rev-parse", "--short" if short else "--long", "HEAD")
+    if short:
+        return _git("rev-parse", "--short", "HEAD")
+    return _git("rev-parse", "HEAD")
 
 
 def get_git_branch() -> str:

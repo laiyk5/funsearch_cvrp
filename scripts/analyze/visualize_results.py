@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Visualize CVRP FunSearch results.
+Visualize FunSearch results: island comparison and per-test score profiles.
 
 Usage:
     python scripts/analyze/visualize_results.py
-    python scripts/analyze/visualize_results.py --commit 7d9a1d6 --timestamp 20250412_153033
-    python scripts/analyze/visualize_results.py --output-dir my_charts/
+    python scripts/analyze/visualize_results.py outputs/latest/run_funsearch
+    python scripts/analyze/visualize_results.py outputs/latest/run_funsearch -o custom.png
 """
 
 from __future__ import annotations
@@ -15,294 +15,147 @@ import json
 import sys
 from pathlib import Path
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-def load_results(results_path: Path) -> list[dict]:
-    """Load results from JSON file."""
-    with open(results_path) as f:
+def load_results(path: Path) -> dict:
+    with open(path) as f:
         return json.load(f)
 
 
-def plot_score_trends(results: list[dict], output_path: Path | None = None):
-    """Plot score trends across iterations for all scales."""
-    iterations = [r["iteration"] for r in results]
-    small_scores = [r["small_scale"]["score"] for r in results]
-    medium_scores = [r["medium_scale"]["score"] for r in results]
-    large_scores = [r["large_scale"]["score"] for r in results]
-    stability_scores = [r["stability"]["avg_score"] for r in results]
+def plot_island_comparison(data: dict, save_path: Path) -> None:
+    best = data.get("best_programs", [])
+    if not best:
+        print("  (no best_programs — skipping)")
+        return
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    islands = [p["island_id"] for p in best]
+    scores = [p["best_score"] for p in best]
 
-    ax.plot(iterations, small_scores, marker="o", label="Small Scale", linewidth=2)
-    ax.plot(iterations, medium_scores, marker="s", label="Medium Scale", linewidth=2)
-    ax.plot(iterations, large_scores, marker="^", label="Large Scale", linewidth=2)
-    ax.plot(iterations, stability_scores, marker="d", label="Stability (Avg)", linewidth=2, linestyle="--")
-
-    ax.set_xlabel("Iteration", fontsize=12)
-    ax.set_ylabel("Score (lower is better)", fontsize=12)
-    ax.set_title("Score Trends Across Iterations", fontsize=14, fontweight="bold")
-    ax.legend(loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-    # Mark best iteration
-    best_idx = np.argmin(stability_scores)
-    best_iter = iterations[best_idx]
-    best_score = stability_scores[best_idx]
-    ax.axvline(x=best_iter, color="red", linestyle=":", alpha=0.7, label=f"Best: Iter {best_iter}")
-    ax.scatter([best_iter], [best_score], color="red", s=100, zorder=5)
-
-    plt.tight_layout()
-
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Saved: {output_path}")
-    else:
-        plt.show()
-
-    plt.close()
-
-
-def plot_gap_analysis(results: list[dict], output_path: Path | None = None):
-    """Plot optimality gap trends."""
-    iterations = [r["iteration"] for r in results]
-    small_gaps = [r["small_scale"]["gap"] for r in results]
-    medium_gaps = [r["medium_scale"]["gap"] for r in results]
-    large_gaps = [r["large_scale"]["gap"] for r in results]
-    avg_gaps = [r["stability"]["avg_gap"] for r in results]
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    ax.plot(iterations, small_gaps, marker="o", label="Small Scale", linewidth=2)
-    ax.plot(iterations, medium_gaps, marker="s", label="Medium Scale", linewidth=2)
-    ax.plot(iterations, large_gaps, marker="^", label="Large Scale", linewidth=2)
-    ax.plot(iterations, avg_gaps, marker="d", label="Average Gap", linewidth=2, linestyle="--")
-
-    ax.set_xlabel("Iteration", fontsize=12)
-    ax.set_ylabel("Optimality Gap (%)", fontsize=12)
-    ax.set_title("Optimality Gap Trends", fontsize=14, fontweight="bold")
-    ax.legend(loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Saved: {output_path}")
-    else:
-        plt.show()
-
-    plt.close()
-
-
-def plot_distance_vs_routes(results: list[dict], output_path: Path | None = None):
-    """Scatter plot of distance vs number of routes."""
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    scales = ["small_scale", "medium_scale", "large_scale"]
-    titles = ["Small Scale", "Medium Scale", "Large Scale"]
-
-    for ax, scale, title in zip(axes, scales, titles, strict=False):
-        distances = [r[scale]["avg_distance"] for r in results]
-        routes = [r[scale]["avg_num_routes"] for r in results]
-        iterations = [r["iteration"] for r in results]
-
-        scatter = ax.scatter(distances, routes, c=iterations, cmap="viridis", s=100, alpha=0.7)
-        ax.set_xlabel("Avg Distance", fontsize=11)
-        ax.set_ylabel("Avg # Routes", fontsize=11)
-        ax.set_title(title, fontsize=12, fontweight="bold")
-        ax.grid(True, alpha=0.3)
-
-        # Add colorbar
-        cbar = plt.colorbar(scatter, ax=ax)
-        cbar.set_label("Iteration", fontsize=10)
-
-    plt.suptitle("Distance vs Routes Trade-off", fontsize=14, fontweight="bold", y=1.02)
-    plt.tight_layout()
-
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Saved: {output_path}")
-    else:
-        plt.show()
-
-    plt.close()
-
-
-def plot_score_distribution(results: list[dict], output_path: Path | None = None):
-    """Box plot of score distribution across scales."""
-    small_scores = [r["small_scale"]["score"] for r in results]
-    medium_scores = [r["medium_scale"]["score"] for r in results]
-    large_scores = [r["large_scale"]["score"] for r in results]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    bp = ax.boxplot(
-        [small_scores, medium_scores, large_scores],
-        tick_labels=["Small Scale", "Medium Scale", "Large Scale"],
-        patch_artist=True,
-    )
-
-    colors = ["#3498db", "#e74c3c", "#2ecc71"]
-    for patch, color in zip(bp["boxes"], colors, strict=False):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.6)
-
-    ax.set_ylabel("Score", fontsize=12)
-    ax.set_title("Score Distribution Across Scales", fontsize=14, fontweight="bold")
+    fig, ax = plt.subplots(figsize=(10, 4))
+    bars = ax.bar(islands, scores, color="steelblue", alpha=0.85)
+    ax.axhline(y=data.get("overall_best", 0), color="red", linestyle="--",
+               linewidth=1, label=f'overall best = {data["overall_best"]:.4f}')
+    ax.set_xlabel("Island")
+    ax.set_ylabel("Score")
+    ax.set_title("Best Score per Island")
+    ax.set_xticks(islands)
+    ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3, axis="y")
 
-    plt.tight_layout()
+    for bar, s in zip(bars, scores):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                f"{s:.3f}", ha="center", va="bottom", fontsize=7)
 
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Saved: {output_path}")
-    else:
-        plt.show()
-
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  island comparison -> {save_path.name}")
 
 
-def create_dashboard(results: list[dict], output_path: Path | None = None):
-    """Create a comprehensive dashboard with all plots."""
-    fig = plt.figure(figsize=(16, 12))
-    gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3)
+def plot_test_profiles(data: dict, save_path: Path) -> None:
+    best = data.get("best_programs", [])
+    if not best:
+        return
 
-    iterations = [r["iteration"] for r in results]
+    # Collect per-test scores from all islands
+    all_keys: set[str] = set()
+    for p in best:
+        all_keys.update(p.get("scores_per_test", {}).keys())
+    if not all_keys:
+        return
+    test_keys = sorted(all_keys, key=lambda k: int(k))
+    n_tests = len(test_keys)
 
-    # 1. Score trends (top left, spans 2 columns)
-    ax1 = fig.add_subplot(gs[0, :])
-    ax1.plot(iterations, [r["small_scale"]["score"] for r in results], marker="o", label="Small", linewidth=2)
-    ax1.plot(iterations, [r["medium_scale"]["score"] for r in results], marker="s", label="Medium", linewidth=2)
-    ax1.plot(iterations, [r["large_scale"]["score"] for r in results], marker="^", label="Large", linewidth=2)
-    ax1.set_xlabel("Iteration")
-    ax1.set_ylabel("Score")
-    ax1.set_title("Score Trends", fontweight="bold")
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
+    # Build a matrix: rows = islands, cols = tests
+    matrix = np.full((len(best), n_tests), np.nan)
+    for i, p in enumerate(best):
+        for j, k in enumerate(test_keys):
+            matrix[i, j] = p.get("scores_per_test", {}).get(k, np.nan)
 
-    # 2. Gap trends (middle left)
-    ax2 = fig.add_subplot(gs[1, 0])
-    ax2.plot(iterations, [r["small_scale"]["gap"] for r in results], marker="o", label="Small", linewidth=2)
-    ax2.plot(iterations, [r["medium_scale"]["gap"] for r in results], marker="s", label="Medium", linewidth=2)
-    ax2.plot(iterations, [r["large_scale"]["gap"] for r in results], marker="^", label="Large", linewidth=2)
-    ax2.set_xlabel("Iteration")
-    ax2.set_ylabel("Gap (%)")
-    ax2.set_title("Optimality Gap", fontweight="bold")
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
+    fig, ax = plt.subplots(figsize=(max(10, n_tests * 0.3), 5))
+    im = ax.imshow(matrix, aspect="auto", cmap="RdYlGn")
 
-    # 3. Score distribution (middle right)
-    ax3 = fig.add_subplot(gs[1, 1])
-    scores_data = [
-        [r["small_scale"]["score"] for r in results],
-        [r["medium_scale"]["score"] for r in results],
-        [r["large_scale"]["score"] for r in results],
+    ax.set_xticks(range(n_tests))
+    ax.set_xticklabels(test_keys, rotation=90, fontsize=6)
+    ax.set_yticks(range(len(best)))
+    ax.set_yticklabels([f"island {p['island_id']}" for p in best], fontsize=7)
+    ax.set_xlabel("Test instance")
+    ax.set_ylabel("Island")
+    ax.set_title("Per-Test Scores Heatmap (best per island)")
+
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label("Score")
+
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  test profiles    -> {save_path.name}")
+
+
+def plot_duration_info(data: dict, save_path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.axis("off")
+
+    config = data.get("config", {})
+    lines = [
+        f"Duration: {data.get('duration_seconds', '?')}s",
+        f"LLM calls: {data.get('llm_calls', '?')}",
+        f"Model: {config.get('llm_model', '?')}",
+        f"Temperature: {config.get('llm_temperature', '?')}",
+        f"Islands: {config.get('num_islands', '?')}",
+        f"Samples/prompt: {config.get('samples_per_prompt', '?')}",
+        f"Overall best: {data.get('overall_best', '?'):.4f}" if data.get('overall_best') is not None else "Overall best: N/A",
     ]
-    bp = ax3.boxplot(scores_data, tick_labels=["Small", "Medium", "Large"], patch_artist=True)
-    colors = ["#3498db", "#e74c3c", "#2ecc71"]
-    for patch, color in zip(bp["boxes"], colors, strict=False):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.6)
-    ax3.set_ylabel("Score")
-    ax3.set_title("Score Distribution", fontweight="bold")
-    ax3.grid(True, alpha=0.3, axis="y")
+    ax.text(0.5, 0.5, "\n".join(lines), transform=ax.transAxes,
+            ha="center", va="center", fontsize=11, family="monospace")
 
-    # 4. Distance vs Routes (bottom, spans 2 columns)
-    ax4 = fig.add_subplot(gs[2, :])
-    x = np.arange(len(results))
-    width = 0.35
-    dists = [r["stability"]["avg_score"] for r in results]
-    bars = ax4.bar(x, dists, width, label="Stability Score", color="#9b59b6", alpha=0.7)
-    ax4.set_xlabel("Iteration")
-    ax4.set_ylabel("Stability Score")
-    ax4.set_title("Stability Score by Iteration", fontweight="bold")
-    ax4.set_xticks(x)
-    ax4.set_xticklabels([str(i) for i in iterations])
-    ax4.grid(True, alpha=0.3, axis="y")
-
-    # Add value labels on bars
-    for bar in bars:
-        height = bar.get_height()
-        ax4.annotate(f"{height:.1f}", xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontsize=8)
-
-    plt.suptitle("CVRP FunSearch Results Dashboard", fontsize=16, fontweight="bold", y=0.995)
-
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Saved: {output_path}")
-    else:
-        plt.show()
-
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  summary          -> {save_path.name}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Visualize CVRP FunSearch results")
-    parser.add_argument("--commit", default=None, help="Git commit hash (default: latest)")
-    parser.add_argument("--timestamp", default=None, help="Timestamp folder (default: latest)")
-    parser.add_argument("--output-dir", default=None, help="Custom directory to save charts (default: outputs/{commit}/{timestamp}/charts/)")
-    parser.add_argument("--dashboard-only", action="store_true", help="Only generate dashboard")
-    parser.add_argument("--show", action="store_true", help="Show plots instead of saving")
+    parser = argparse.ArgumentParser(description="Visualize FunSearch final results")
+    parser.add_argument("output_dir", type=str, nargs="?", default=None,
+                        help="Path to a run_funsearch output directory (default: outputs/latest/run_funsearch)")
+    parser.add_argument("-o", "--output", default=None,
+                        help="Save a specific file (otherwise all in {experiment}/visualize_results/)")
     args = parser.parse_args()
 
-    # Determine results path
-    base_dir = Path("outputs")
-
-    if args.commit:
-        commit_dir = base_dir / args.commit
+    # Resolve experiment directory
+    if args.output_dir:
+        exp_dir = Path(args.output_dir)
     else:
-        latest_link = base_dir / "latest"
-        if latest_link.exists():
-            commit_dir = latest_link.resolve().parent
-        else:
-            print("Error: No results found. Run an experiment first.")
+        latest = Path("outputs/latest")
+        if not latest.exists():
+            print("Error: no outputs/latest found. Provide an explicit path.", file=sys.stderr)
             sys.exit(1)
+        exp_dir = latest.resolve() / "run_funsearch"
 
-    if args.timestamp:
-        results_dir = commit_dir / args.timestamp
-    else:
-        # Use latest timestamp
-        timestamps = sorted([d for d in commit_dir.iterdir() if d.is_dir()])
-        if not timestamps:
-            print(f"Error: No timestamp folders in {commit_dir}")
-            sys.exit(1)
-        results_dir = timestamps[-1]
-
-    results_file = results_dir / "iterative_search_results.json"
+    results_file = exp_dir / "funsearch_results.json"
     if not results_file.exists():
-        print(f"Error: Results file not found: {results_file}")
+        print(f"Error: {results_file} not found", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Loading results from: {results_file}")
-    results = load_results(results_file)
-    print(f"Loaded {len(results)} iterations")
+    print(f"Loading: {results_file}")
+    data = load_results(results_file)
 
-    if args.show:
-        output_dir = None
+    # Output: sibling to experiment dir
+    run_dir = exp_dir.parent
+    out_dir = run_dir / "visualize_results"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.output:
+        plot_island_comparison(data, Path(args.output))
     else:
-        # Use custom output dir if specified, otherwise use outputs/{commit}/{timestamp}/charts/
-        if args.output_dir:
-            output_dir = Path(args.output_dir)
-        else:
-            output_dir = results_dir / "charts"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Saving charts to: {output_dir}")
+        plot_island_comparison(data, out_dir / "island_comparison.png")
+        plot_test_profiles(data, out_dir / "test_profiles.png")
+        plot_duration_info(data, out_dir / "summary.png")
 
-    # Generate charts
-    if args.dashboard_only:
-        create_dashboard(results, output_dir / "dashboard.png" if output_dir else None)
-    else:
-        create_dashboard(results, output_dir / "dashboard.png" if output_dir else None)
-        plot_score_trends(results, output_dir / "score_trends.png" if output_dir else None)
-        plot_gap_analysis(results, output_dir / "gap_analysis.png" if output_dir else None)
-        plot_distance_vs_routes(results, output_dir / "distance_vs_routes.png" if output_dir else None)
-        plot_score_distribution(results, output_dir / "score_distribution.png" if output_dir else None)
-
-    if output_dir:
-        print(f"\nAll charts saved to: {output_dir}")
+    print(f"Done -> {out_dir}/")
 
 
 if __name__ == "__main__":
