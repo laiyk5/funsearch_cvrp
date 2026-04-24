@@ -14,7 +14,8 @@
 # ==============================================================================
 
 """A single-threaded implementation of the FunSearch pipeline."""
-from collections.abc import Sequence
+import inspect
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from . import code_manipulation
@@ -24,30 +25,41 @@ from . import programs_database
 from . import sampler
 
 
-def _extract_function_names(specification: str) -> tuple[str, str]:
-  """Returns the name of the function to evolve and of the function to run."""
-  run_functions = list(
-      code_manipulation.yield_decorated(specification, 'funsearch', 'run'))
-  if len(run_functions) != 1:
-    raise ValueError('Expected 1 function decorated with `@funsearch.run`.')
-  evolve_functions = list(
-      code_manipulation.yield_decorated(specification, 'funsearch', 'evolve'))
-  if len(evolve_functions) != 1:
-    raise ValueError('Expected 1 function decorated with `@funsearch.evolve`.')
-  return evolve_functions[0], run_functions[0]
-
-
 def main(
-    specification: str,
+    evolve_func: Callable,
+    evaluate_fn: Callable,
     inputs: Sequence[Any],
     config: config_lib.Config,
+    prompt: str | None = None,
     llm: sampler.LLM | None = None,
     sandbox: evaluator.Sandbox | None = None,
 ):
-  """Launches a FunSearch experiment."""
-  function_to_evolve, function_to_run = _extract_function_names(specification)
+  """Launches a FunSearch experiment.
 
-  template = code_manipulation.text_to_program(specification)
+  Args:
+    evolve_func: The seed function to evolve. Its source code is extracted via
+      ``inspect.getsource()`` and used as the template for the programs
+      database.
+    evaluate_fn: Callable with signature ``evaluate_fn(test_input,
+      evolved_func) -> float``.  This is your real evaluation harness (e.g.
+      ``evaluate_cvrp``).  It receives one test input and the evolved function
+      object, and must return a scalar score (higher = better).
+    inputs: Sequence of test inputs. Each input is passed individually to
+      ``evaluate_fn``.
+    config: FunSearch configuration.
+    prompt: Optional context string prepended to every LLM prompt. Use this
+      to provide background on types, helper functions, and the problem domain.
+    llm: Optional LLM instance. If None, an OpenAILLM is created from
+      ``config.llm``.
+    sandbox: Optional sandbox for executing evolved code. If None, a
+      SimpleSandbox is used.
+  """
+  function_to_evolve = evolve_func.__name__
+
+  # Extract source of the evolve function and build the template Program.
+  source = inspect.getsource(evolve_func)
+  template = code_manipulation.text_to_program(source)
+
   database = programs_database.ProgramsDatabase(
       config.programs_database, template, function_to_evolve)
 
@@ -61,11 +73,12 @@ def main(
         database,
         template,
         function_to_evolve,
-        function_to_run,
+        evaluate_fn,
         inputs,
         sandbox=sandbox,
     ))
-  # We send the initial implementation to be analysed by one of the evaluators.
+
+  # Send the initial implementation to be analysed by one evaluator.
   initial = template.get_function(function_to_evolve).body
   evaluators[0].analyse(initial, island_id=None, version_generated=None)
 
@@ -78,13 +91,11 @@ def main(
         max_tokens=config.llm.max_tokens,
         api_key=config.llm.api_key,
         base_url=config.llm.base_url,
+        prompt=prompt,
     )
 
   samplers = [sampler.Sampler(database, evaluators, llm)
               for _ in range(config.num_samplers)]
 
-  # This loop can be executed in parallel on remote sampler machines. As each
-  # sampler enters an infinite loop, without parallelization only the first
-  # sampler will do any work.
   for s in samplers:
     s.sample()

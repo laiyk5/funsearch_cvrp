@@ -165,3 +165,60 @@ def print_results_summary(base_dir: str = "outputs") -> None:
         commit = r.get("git_commit", "unknown")[:8]
         print(f"  {r['dir']}  commit={commit}{dirty}")
     print()
+
+
+def list_experiments_table(base_dir: str = "outputs") -> list[dict]:
+    """Return all experiments with metadata, newest first."""
+    import json as _json
+    base = Path(base_dir)
+    if not base.exists():
+        return []
+    runs = []
+    for d in sorted(base.iterdir(), reverse=True):
+        if not d.is_dir() or d.name in ("latest",):
+            continue
+        meta_file = d / "run_funsearch" / "meta.json"
+        if not meta_file.exists():
+            meta_file = d / "meta.json"
+        meta = _json.loads(meta_file.read_text()) if meta_file.exists() else {}
+        run_entries = meta.get("runs", [])
+        latest_run = run_entries[-1] if run_entries else {}
+        raw_commit = latest_run.get("git_commit") or ""
+        if raw_commit.startswith("--long\n"):
+            raw_commit = raw_commit.split("\n", 1)[1] if "\n" in raw_commit else raw_commit
+        commit = raw_commit[:8] if raw_commit else "unknown"
+        runs.append({
+            "dir": d.name,
+            "commit": commit,
+            "dirty": latest_run.get("git_dirty", False),
+            "n_runs": len(run_entries),
+            "model": latest_run.get("args", {}).get("model", "?"),
+        })
+    return runs
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """``python -m funsearch_cvrp.utils.output_manager list``"""
+    import sys
+    if len(sys.argv) < 2 or sys.argv[1] != "list":
+        print("Usage: python -m funsearch_cvrp.utils.output_manager list", file=sys.stderr)
+        sys.exit(1)
+
+    experiments = list_experiments_table()
+    if not experiments:
+        print("No experiments found in outputs/")
+        return
+    print(f"{'EXPERIMENT':<22} {'COMMIT':<10} {'MODEL':<18} {'RUNS':>4}  {'DIRTY':>5}")
+    print("-" * 70)
+    for e in experiments:
+        dirty = "dirty" if e.get("dirty") else ""
+        print(f"  {e['dir']:<20} {e['commit']:<10} {e['model']:<18} {e['n_runs']:>4}  {dirty:>5}")
+
+
+if __name__ == "__main__":
+    main()

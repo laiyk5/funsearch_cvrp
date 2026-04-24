@@ -1,130 +1,40 @@
-# Copyright 2023 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+"""Tests for the funsearch module — current public API."""
 
 from absl.testing import absltest
 from absl.testing import parameterized
 
+from funsearch_cvrp.funsearch import code_manipulation
+from funsearch_cvrp.funsearch import config
 from funsearch_cvrp.funsearch import funsearch
-
-_PY_PROMPT = '''\
-import itertools
-import jax
-
-
-@funsearch.run
-@jax.jit
-def run(n: int):
-  return capset(n)
-
-
-@funsearch.evolve
-def capset(n: int):
-  """Trivial implementation of capset.
-
-  Args: ...
-  """
-  return [[1,] * n]
-'''
-
-_PY_PROMPT_EVOLVE_RUN = '''\
-import itertools
-
-
-@funsearch.run
-@funsearch.evolve
-def capset(n: int):
-  return [[1,] * n]
-'''
-
-_PY_PROMPT_NO_RUN = '''\
-import itertools
-
-
-def run(n: int):
-  return capset(n)
-
-@funsearch.evolve
-def capset(n: int):
-  """Trivial implementation of capset.
-
-  Args: ...
-  """
-  return [[1,] * n]
-'''
-
-_PY_PROMPT_NO_EVOLVE = '''\
-import itertools
-
-
-@funsearch.run
-def run(n: int):
-  return capset(n)
-
-
-def capset(n: int):
-  """Trivial implementation of capset.
-
-  Args: ...
-  """
-  return [[1,] * n]
-'''
-
-_PY_PROMPT_DOUBLE_RUN = '''\
-import itertools
-
-@funsearch.run
-def run(n: int):
-  return capset(n)
-
-@funsearch.run
-def capset(n: int):
-  """Trivial implementation of capset.
-
-  Args: ...
-  """
-  return [[1,] * n]
-'''
 
 
 class FunsearchTest(parameterized.TestCase):
 
-  def test_extract_function_names(self):
-    to_evolve, to_run = funsearch._extract_function_names(_PY_PROMPT)
-    self.assertEqual(to_run, 'run')
-    self.assertEqual(to_evolve, 'capset')
+    def test_module_exports_main(self):
+        self.assertTrue(callable(funsearch.main))
 
-  def test_extract_function_names_evolve_and_run(self):
-    to_evolve, to_run = funsearch._extract_function_names(_PY_PROMPT_EVOLVE_RUN)
-    self.assertEqual(to_run, 'capset')
-    self.assertEqual(to_evolve, 'capset')
+    def test_code_manipulation_text_to_program(self):
+        src = '''def priority(a, b):
+      """Test."""
+      return a + b
+    '''
+        program = code_manipulation.text_to_program(src)
+        self.assertLen(program.functions, 1)
+        self.assertEqual(program.functions[0].name, "priority")
+        self.assertEqual(program.functions[0].args, "a, b")
+        self.assertIn("return a + b", program.functions[0].body)
 
-  def test_extract_function_names_no_run(self):
-    with self.assertRaisesRegex(
-        ValueError, r'Expected 1 function decorated with `@funsearch.run`.'):
-      funsearch._extract_function_names(_PY_PROMPT_NO_RUN)
+    def test_code_manipulation_text_to_function(self):
+        src = "def foo(x, y):\n  return x * y"
+        fn = code_manipulation.text_to_function(src)
+        self.assertEqual(fn.name, "foo")
+        self.assertEqual(fn.args, "x, y")
 
-  def test_extract_function_names_no_evolve(self):
-    with self.assertRaisesRegex(
-        ValueError, r'Expected 1 function decorated with `@funsearch.evolve`.'):
-      funsearch._extract_function_names(_PY_PROMPT_NO_EVOLVE)
-
-  def test_extract_function_names_double_run(self):
-    with self.assertRaisesRegex(
-        ValueError, r'Expected 1 function decorated with `@funsearch.run`.'):
-      funsearch._extract_function_names(_PY_PROMPT_DOUBLE_RUN)
+    def test_config_defaults(self):
+        db_config = config.ProgramsDatabaseConfig()
+        self.assertEqual(db_config.num_islands, 10)
+        self.assertEqual(db_config.functions_per_prompt, 3)
 
 
-if __name__ == '__main__':
-  absltest.main()
+if __name__ == "__main__":
+    absltest.main()

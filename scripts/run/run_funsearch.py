@@ -17,11 +17,16 @@ import inspect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.funsearch import code_manipulation, config as config_lib, evaluator, funsearch, programs_database, sampler
-from src.funsearch_cvrp.config import config as project_config
-from src.funsearch_cvrp.cvrp.core import CVRPInstance, make_greedy_solver, gap_score, is_valid_solution, solution_distance
-from src.funsearch_cvrp.cvrp.io import load_cvrplib_folder
-from src.funsearch_cvrp.utils.output_manager import get_output_dir
+from funsearch_cvrp.funsearch import code_manipulation, config as config_lib, evaluator, funsearch, programs_database, sampler
+from funsearch_cvrp.config import config as project_config
+from funsearch_cvrp.cvrp.core import CVRPInstance, make_greedy_solver, gap_score, is_valid_solution, solution_distance
+from funsearch_cvrp.cvrp.io import load_cvrplib_folder
+from datetime import datetime as _dt
+from funsearch_cvrp.utils.output_manager import (
+    get_output_dir,
+    get_git_commit_hash,
+    is_git_dirty,
+)
 
 _logger = logging.getLogger('funsearch')
 
@@ -240,14 +245,14 @@ class MockLLM(sampler.LLM):
         generation_time = _time.time()
         self._count += 1
         variants = [
-            "    return 1.0",
-            "    return -float(el[0])",
-            "    return float(n - w)",
-            "    return float(el.count(1))",
-            "    return float(el.count(2))",
-            "    return random.random()",
-            "    return float(n) / (w + 1)",
-            "    return -sum(el)",
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  d_dep = math.hypot(instance.coords[candidate][0] - instance.coords[0][0], instance.coords[candidate][1] - instance.coords[0][1])\n  return -d_cur + 0.5 * d_dep',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  if remaining_capacity < instance.demands[candidate]:\n    return -1e6\n  return -(d_cur / (remaining_capacity + 1))',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  d_dep = math.hypot(instance.coords[0][0] - instance.coords[candidate][0], instance.coords[0][1] - instance.coords[candidate][1])\n  return -d_cur - 0.1 * d_dep * instance.demands[candidate]',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  return -d_cur / (instance.demands[candidate] + 1)',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  d_dep = math.hypot(instance.coords[0][0] - instance.coords[candidate][0], instance.coords[0][1] - instance.coords[candidate][1])\n  ratio = remaining_capacity / instance.capacity if instance.capacity else 0\n  return -d_cur + 0.3 * d_dep + 2.0 * ratio',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  d_dep = math.hypot(instance.coords[0][0] - instance.coords[candidate][0], instance.coords[0][1] - instance.coords[candidate][1])\n  if remaining_capacity >= instance.demands[candidate]:\n    return -d_cur\n  return -d_cur - 10.0 * (instance.demands[candidate] - remaining_capacity)',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  d_dep = math.hypot(instance.coords[0][0] - instance.coords[candidate][0], instance.coords[0][1] - instance.coords[candidate][1])\n  return -d_cur * (remaining_capacity / instance.capacity) + d_dep * 0.2',
+            'import math\n  d_cur = math.hypot(instance.coords[current_node][0] - instance.coords[candidate][0], instance.coords[current_node][1] - instance.coords[candidate][1])\n  d_dep = math.hypot(instance.coords[0][0] - instance.coords[candidate][0], instance.coords[0][1] - instance.coords[candidate][1])\n  if len(unserved) > 0:\n    return -d_cur + d_dep / len(unserved)\n  return -d_cur',
         ]
         code = variants[self._count % len(variants)]
         _logger.debug('MOCK LLM PROMPT:\n%s', prompt)
@@ -552,6 +557,26 @@ def main() -> None:
             "mock_llm": args.mock_llm,
             "model": config.llm.model if config.llm else "mock",
         })
+
+    # Write / append run entry to meta.json so analysis tools discover every run.
+    _meta_file = output_dir / "meta.json"
+    _run_entry = {
+        "run_time": _dt.now().isoformat(),
+        "git_commit": get_git_commit_hash(short=False),
+        "git_dirty": is_git_dirty(),
+        "args": {
+            "iterations": args.iterations,
+            "mock_llm": args.mock_llm,
+            "model": config.llm.model if config.llm else "mock",
+        },
+    }
+    if _meta_file.exists():
+        _meta = json.loads(_meta_file.read_text())
+        _meta.setdefault("runs", []).append(_run_entry)
+        _meta_file.write_text(json.dumps(_meta, indent=2, ensure_ascii=False))
+    else:
+        _meta_file.write_text(json.dumps({
+            "runs": [_run_entry]}, indent=2, ensure_ascii=False))
 
     # Update latest symlink if we are inside an "outputs" tree.
     run_dir = output_dir.parent

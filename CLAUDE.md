@@ -28,9 +28,11 @@ cp config.ini.example config.ini
 ### Testing
 
 ```bash
-python -m unittest discover -s tests -p "test_*.py"
-pytest tests/
-python -m unittest tests.test_project.TestCVRPProject.test_baseline_runs
+# Run all tests with coverage
+pytest tests/ -v --cov=funsearch_cvrp --cov-report=term-missing
+
+# Run a single test file
+pytest tests/test_output_manager.py -v
 ```
 
 ### Linting/Formatting
@@ -56,11 +58,22 @@ python scripts/run/run_funsearch.py --iterations 200 --resume outputs/latest/run
 python scripts/run/run_funsearch.py --iterations 100 --limit-instances 10
 ```
 
-### Visualization
+### Listing Experiments
 
 ```bash
-python scripts/analyze/visualize_evolution.py outputs/latest/run_funsearch
+PYTHONPATH=src python -m funsearch_cvrp.utils.output_manager list
 ```
+
+### Analyzing Results
+
+```bash
+python scripts/analyze/analyze.py summary [dir]                  # one-page dashboard
+python scripts/analyze/analyze.py evolution [dir]                # score over iterations
+python scripts/analyze/analyze.py programs [dir]                 # extract & compare
+python scripts/analyze/analyze.py llm [dir]                      # prompt/response analysis
+```
+
+All outputs go to `<experiment>/analysis/<subcommand>/`.
 
 ## Architecture Overview
 
@@ -133,9 +146,11 @@ outputs/YYYYmmdd_HHMMSS/
 │   │   └── sampler_iter_000000_000999.jsonl
 │   ├── checkpoint.pkl
 │   └── best_program.py                      ← exported on every NEW BEST milestone
-├── visualize_evolution/                     ← analysis output (sibling to experiment)
-│   ├── evolution.png
-│   └── evolution_test_*.png
+├── analysis/                                 ← analysis outputs (sibling to experiment)
+│   ├── evolution/  (overall.png, test_*.png)
+│   ├── programs/   (code/, island_scores.png, score_vs_length.png)
+│   ├── llm/        (response_lengths.png, latency.png)
+│   └── summary/    (summary.md, dashboard.png)
 └── meta.json
 ```
 
