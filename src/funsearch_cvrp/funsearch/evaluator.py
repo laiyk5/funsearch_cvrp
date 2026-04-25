@@ -219,6 +219,7 @@ class Evaluator:
       return
 
     scores_per_test = {}
+    any_failed = False
     for idx, current_input in enumerate(self._inputs):
       test_output, runs_ok = self._sandbox.run(
           evolved_fn_code,
@@ -231,6 +232,18 @@ class Evaluator:
         if not isinstance(test_output, (int, float)):
           raise ValueError('evaluate_fn did not return an int/float score.')
         scores_per_test[idx] = test_output
+      else:
+        any_failed = True
+
+    # Reject programs that crash on ANY instance — robustness is mandatory.
+    if any_failed:
+      _logger.debug('[island=%s] REJECTED (crash on instance %d)\n%s', island_id, idx, new_function.body)
+      self._maybe_write_eval_history(
+          iteration=iteration, island_id=island_id,
+          generation_time=generation_time, eval_time=eval_start,
+          body=new_function.body, scores_per_test={},
+          accepted=False, reject_reason='instance_crash')
+      return None
 
     if scores_per_test:
       # Use the last test instance as the reduced score, matching

@@ -45,6 +45,37 @@ def load_meta(exp_dir: Path | None = None) -> dict:
     return json.loads(p.read_text()) if p.exists() else {}
 
 
+def resolve_history(exp_dir: Path | None = None) -> list[Path]:
+    """Return the chain of ``run_funsearch/`` directories from oldest to newest.
+
+    Walks the ``resumed_from`` field in ``meta.json`` recursively.
+    """
+    current = resolve_experiment(exp_dir)
+    chain: list[Path] = [current]
+    seen: set[Path] = {current.resolve()}
+
+    while True:
+        meta = load_meta(current)
+        resumed = None
+        for run in meta.get("runs", []):
+            if "resumed_from" in run:
+                src = Path(run["resumed_from"]).resolve()
+                # The checkpoint sits inside run_funsearch/
+                if src.name == "checkpoint.pkl":
+                    src = src.parent
+                if src not in seen:
+                    resumed = src
+                    seen.add(src)
+                break
+        if resumed is None or not resumed.exists():
+            break
+        chain.append(resumed)
+        current = resumed
+
+    # oldest first
+    return list(reversed(chain))
+
+
 def _read_jsonl(filepath: Path) -> list[dict]:
     if not filepath.exists():
         return []
@@ -82,24 +113,46 @@ def _load_rolling(subdir: str, stem: str, exp_dir: Path | None = None) -> list[d
 # Public loaders
 # ---------------------------------------------------------------------------
 
-def load_final_results(exp_dir: Path | None = None) -> dict:
+def load_final_results(exp_dir: Path | None = None, *, full_history: bool = False) -> dict:
     """Load ``funsearch_results.json`` (the final snapshot)."""
+    if full_history:
+        dirs = resolve_history(exp_dir)
+        for d in reversed(dirs):
+            p = d / "funsearch_results.json"
+            if p.exists():
+                return json.loads(p.read_text())
+        return {}
     p = resolve_experiment(exp_dir) / "funsearch_results.json"
     return json.loads(p.read_text()) if p.exists() else {}
 
 
-def load_database_log(exp_dir: Path | None = None) -> list[dict]:
+def load_database_log(exp_dir: Path | None = None, *, full_history: bool = False) -> list[dict]:
     """Load all database log records (best scores per island per iteration)."""
+    if full_history:
+        records: list[dict] = []
+        for d in resolve_history(exp_dir):
+            records.extend(_load_rolling("database", "database", d))
+        return records
     return _load_rolling("database", "database", exp_dir)
 
 
-def load_eval_log(exp_dir: Path | None = None) -> list[dict]:
+def load_eval_log(exp_dir: Path | None = None, *, full_history: bool = False) -> list[dict]:
     """Load all evaluation records (per-program scores, timing, milestone)."""
+    if full_history:
+        records: list[dict] = []
+        for d in resolve_history(exp_dir):
+            records.extend(_load_rolling("eval", "eval", d))
+        return records
     return _load_rolling("eval", "eval", exp_dir)
 
 
-def load_sampler_log(exp_dir: Path | None = None) -> list[dict]:
+def load_sampler_log(exp_dir: Path | None = None, *, full_history: bool = False) -> list[dict]:
     """Load all sampler records (LLM prompts and responses)."""
+    if full_history:
+        records: list[dict] = []
+        for d in resolve_history(exp_dir):
+            records.extend(_load_rolling("sampler", "sampler", d))
+        return records
     return _load_rolling("sampler", "sampler", exp_dir)
 
 

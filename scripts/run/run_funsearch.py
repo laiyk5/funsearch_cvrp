@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from funsearch_cvrp.funsearch import code_manipulation, config as config_lib, evaluator, funsearch, programs_database, sampler
 from funsearch_cvrp.config import config as project_config
-from funsearch_cvrp.cvrp.core import CVRPInstance, make_greedy_solver, gap_score, is_valid_solution, solution_distance
+from funsearch_cvrp.cvrp.core import CVRPInstance, make_greedy_solver, make_savings_solver, gap_score, is_valid_solution, solution_distance
 from funsearch_cvrp.cvrp.io import load_cvrplib_folder
 from datetime import datetime as _dt
 from funsearch_cvrp.utils.output_manager import (
@@ -423,7 +423,75 @@ def evaluate_cvrp(instance_and_optimal: tuple[CVRPInstance, float], priority_fn)
     return -gap
 
 
-PROMPT = """You are improving a priority function for a Capacitated Vehicle Routing Problem (CVRP) solver.
+def _create_robustness_instances() -> list[tuple[CVRPInstance, float]]:
+    """Create synthetic edge-case instances that stress-test evolved code.
+
+    Covers:
+      - customer at the same coordinates as the depot (d_i_depot = 0)
+      - two customers at identical coordinates (d_i_j = 0)
+      - customer with demand equal to capacity
+    """
+    instances = []
+
+    # Instance 1: one customer at the depot location
+    inst = CVRPInstance(
+        name="robust_depot_overlap",
+        capacity=10,
+        demands=[0, 5, 3],
+        coords=[(0.0, 0.0), (0.0, 0.0), (10.0, 0.0)],
+    )
+    # optimal: depot->2->depot = 20, depot->1->depot = 0 (but 1 is at depot)
+    # Actually optimal routes: [1] (distance 0) and [2] (distance 20)
+    instances.append((inst, 20.0))
+
+    # Instance 2: two customers at identical coordinates
+    inst = CVRPInstance(
+        name="robust_identical_coords",
+        capacity=10,
+        demands=[0, 4, 4],
+        coords=[(0.0, 0.0), (5.0, 5.0), (5.0, 5.0)],
+    )
+    # optimal: [1,2] -> depot->1->2->depot = 0 (identical coords, distance 0 between them)
+    # Wait, distance from depot to (5,5) is ~7.07. Route [1,2] = 7.07 + 0 + 7.07 = 14.14
+    instances.append((inst, 14.142135623730951))
+
+    # Instance 3: one customer with demand = capacity
+    inst = CVRPInstance(
+        name="robust_full_capacity",
+        capacity=10,
+        demands=[0, 10, 3],
+        coords=[(0.0, 0.0), (3.0, 4.0), (6.0, 8.0)],
+    )
+    # optimal: [1] -> 10, [2] -> 20 = 30
+    instances.append((inst, 30.0))
+
+    return instances
+
+
+def evaluate_cvrp_savings(instance_and_optimal: tuple[CVRPInstance, float], savings_fn) -> float:
+    """Evaluate one CVRP instance using the evolved savings function.
+
+    Uses a Clarke-Wright-style savings construction followed by 2-opt.
+
+    Returns:
+        ``-gap`` where gap = (distance - optimal) / optimal.
+        Higher is better (FunSearch maximizes).
+        Invalid solutions return a large negative penalty.
+    """
+    instance, optimal = instance_and_optimal
+    solver = make_savings_solver(savings_fn, two_opt=True)
+    routes = solver(instance)
+
+    valid, _ = is_valid_solution(instance, routes)
+    if not valid:
+        return -1e9
+
+    dist = solution_distance(instance, routes)
+    gap = (dist - optimal) / optimal
+    return -gap
+
+
+PROMPT_PRIORITY = """You are improving a priority function for a Capacitated Vehicle Routing Problem (CVRP) solver.
 
 The solver uses a greedy constructive heuristic. At each step it builds a route by choosing
 the next customer with the highest priority score returned by your function.
@@ -453,6 +521,44 @@ Tips:
 - Consider remaining capacity vs. candidate demand.
 - Consider the distance from candidate back to the depot.
 - Balance short-term gains with long-term route efficiency.
+"""
+
+PROMPT_SAVINGS = """You are improving a savings function for a Capacitated Vehicle Routing Problem (CVRP) solver.
+
+The solver uses a Clarke-Wright-style savings algorithm:
+1. Start with individual routes (depot -> customer -> depot) for each customer.
+2. Compute the "savings" of merging two routes: if route A ends at customer i
+   and route B starts at customer j, merging them eliminates two depot visits
+   (i->depot and depot->j) and replaces them with a direct i->j link.
+3. Repeatedly merge the pair of routes with the highest savings until no more
+   merges are feasible (capacity constraints).
+4. Apply 2-opt local search to each route for refinement.
+
+Your function computes the savings value for a potential merge.
+
+The function signature is:
+
+def savings(i, j, instance) -> float:
+    ...
+
+Where:
+- i: int — last customer of the first route
+- j: int — first customer of the second route
+- instance: CVRPInstance with attributes:
+    - coords: list[(x, y)] — 2-D coordinates, index 0 is the depot
+    - demands: list[int] — demand per node, demands[0] = 0
+    - capacity: int — vehicle capacity
+    - n_customers: int — number of customers
+
+Higher return value = higher priority for merging the routes ending at i and starting at j.
+
+Tips:
+- The classic Clarke-Wright savings is: distance(i, depot) + distance(depot, j) - distance(i, j)
+- Consider demand balance: merging routes with complementary demands is often good.
+- Consider spatial clustering: merging nearby routes is usually beneficial.
+- Consider the angle between i->depot and depot->j — more collinear routes may merge better.
+- Avoid creating routes that are too long or have poor shape.
+- IMPORTANT: Always guard against division by zero. Some customers may be at the same coordinates as the depot or at the exact same location as another customer. Check `d_i_depot < 1e-9` or `d_i_j < 1e-9` before dividing and return a safe fallback (e.g., `float('inf')`) when distances are zero.
 """
 
 
@@ -601,17 +707,37 @@ def main() -> None:
         default=10,
         help="Evaluate best program on test set every N iterations (default: 10)",
     )
+    parser.add_argument(
+        "--spec",
+        default="priority",
+        choices=["priority", "savings"],
+        help="Specification to evolve: priority (greedy) or savings (Clarke-Wright style) (default: priority)",
+    )
 
     args = parser.parse_args()
 
-    # Import the specification module
-    from specifications import cvrp_spec as spec_module
+    # Import the specification module dynamically
+    if args.spec == "savings":
+        from specifications import cvrp_spec_savings as spec_module
+        evaluate_fn = evaluate_cvrp_savings
+        prompt_text = PROMPT_SAVINGS
+        function_to_evolve = "savings"
+    else:
+        from specifications import cvrp_spec as spec_module
+        evaluate_fn = evaluate_cvrp
+        prompt_text = PROMPT_PRIORITY
+        function_to_evolve = "priority"
 
     # Load instances with known optima
     folder = args.dataset_folder or project_config.get("CVRP", "dataset_folder", fallback="data/cvrplib/A")
     instances_sols = load_cvrplib_folder(folder, limit=args.limit_instances)
     inputs = [(inst, cost) for inst, _, cost in instances_sols]
     _logger.info(f"Loaded {len(inputs)} CVRP instances with known optima from {folder}")
+
+    # Add synthetic edge-case instances to stress-test robustness
+    robustness = _create_robustness_instances()
+    inputs = robustness + inputs
+    _logger.info(f"Prepended {len(robustness)} robustness instances (total {len(inputs)})")
 
     # Split into train / test for generalization evaluation
     train_inputs = inputs
@@ -725,9 +851,8 @@ def main() -> None:
     _logger.addHandler(_sh)
 
     # Build template from the evolve function
-    source = inspect.getsource(spec_module.priority)
+    source = inspect.getsource(getattr(spec_module, function_to_evolve))
     template = code_manipulation.text_to_program(source)
-    function_to_evolve = "priority"
 
     # Create or resume database
     completed_iterations = 0
@@ -762,7 +887,7 @@ def main() -> None:
             database,
             template,
             function_to_evolve,
-            evaluate_cvrp,
+            evaluate_fn,
             train_inputs,
             sandbox=sandbox,
             eval_history_path=eval_history_path,
@@ -791,7 +916,7 @@ def main() -> None:
             max_tokens=config.llm.max_tokens,
             api_key=config.llm.api_key,
             base_url=config.llm.base_url,
-            prompt=PROMPT,
+            prompt=prompt_text,
             sampler_log_path=sampler_log_path,
         )
         _logger.info(f"Using OpenAI LLM: {config.llm.model}")
@@ -811,7 +936,7 @@ def main() -> None:
         test_inputs=test_inputs,
         test_sandbox=sandbox,
         function_to_evolve=function_to_evolve,
-        evaluate_fn=evaluate_cvrp,
+        evaluate_fn=evaluate_fn,
         test_eval_path=test_eval_path,
         test_eval_every=args.test_eval_every,
     )

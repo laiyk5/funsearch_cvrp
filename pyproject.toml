@@ -12,6 +12,8 @@ dependencies = [
     "absl-py>=2.4.0",
     "scipy>=1.17.1",
     "vrplib>=2.2.0",
+    "ipykernel>=6.0.0",
+    "ipywidgets>=8.0.0",
 ]
 authors = [
     {name = "LAI Yikai", email = "laiyk5@163.com"},

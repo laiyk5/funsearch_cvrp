@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.analyze.lib.data import (
     resolve_experiment,
+    resolve_history,
     load_final_results,
     load_database_log,
     load_eval_log,
@@ -53,6 +54,89 @@ def _out_dir(exp_dir: Path, subcommand: str) -> Path:
     return d
 
 
+
+
+# ===========================================================================
+# Subcommand: islands
+# ===========================================================================
+
+
+def cmd_islands(args: argparse.Namespace) -> None:
+    exp_dir = resolve_experiment(args.experiment)
+    out_dir = _out_dir(exp_dir, "islands")
+    print(f"Experiment: {exp_dir}")
+    if args.full_history:
+        hist = resolve_history(exp_dir)
+        print(f"  Full history: {len(hist)} run(s)")
+
+    db = load_database_log(exp_dir, full_history=args.full_history)
+    if not db:
+        print("  No database log found.")
+        return
+
+    its = [r["iteration"] for r in db]
+    n_islands = len(db[0].get("best_score_per_island", []))
+    if n_islands == 0:
+        print("  No per-island data.")
+        return
+
+    # --- Overlay plot: all islands on one axis ---
+    fig, ax = plt.subplots(figsize=(12, 5))
+    cmap = plt.get_cmap("tab10" if n_islands <= 10 else "tab20")
+    for island_id in range(n_islands):
+        scores = [r["best_score_per_island"][island_id] for r in db]
+        ax.plot(its, scores, linewidth=1.0, alpha=0.7,
+                color=cmap(island_id % cmap.N), label=f"I{island_id}")
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Best Score")
+    ax.set_title("Per-Island Best Score Evolution")
+    ax.legend(loc="upper left", fontsize=7, ncol=min(n_islands, 5))
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fpath = out_dir / "islands_overlay.png"
+    fig.savefig(fpath, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  overlay  -> {fpath.name}")
+
+    # --- Grid plot: one subplot per island ---
+    cols = min(5, n_islands)
+    rows = (n_islands + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, rows * 2.5),
+                             sharex=True, sharey=True)
+    if rows == 1 and cols == 1:
+        axes = [[axes]]
+    elif rows == 1 or cols == 1:
+        axes = [axes] if rows == 1 else [[a] for a in axes]
+    else:
+        axes = axes.tolist()
+
+    overall_best = [r["overall_best"] for r in db]
+    for island_id in range(n_islands):
+        r = island_id // cols
+        c = island_id % cols
+        ax = axes[r][c]
+        scores = [r["best_score_per_island"][island_id] for r in db]
+        ax.plot(its, scores, linewidth=1.0, color="steelblue")
+        ax.plot(its, overall_best, linewidth=0.8, color="red",
+                linestyle="--", alpha=0.5, label="overall best")
+        ax.set_title(f"Island {island_id}", fontsize=8)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=6)
+
+    # Hide unused subplots
+    for idx in range(n_islands, rows * cols):
+        r = idx // cols
+        c = idx % cols
+        axes[r][c].axis("off")
+
+    fig.suptitle("Best Score per Island", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fpath = out_dir / "islands_grid.png"
+    fig.savefig(fpath, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  grid     -> {fpath.name}")
+
+    print(f"Done -> {out_dir}/")
 
 
 # ===========================================================================
@@ -140,9 +224,12 @@ def cmd_evolution(args: argparse.Namespace) -> None:
     exp_dir = resolve_experiment(args.experiment)
     out_dir = _out_dir(exp_dir, "evolution")
     print(f"Experiment: {exp_dir}")
+    if args.full_history:
+        hist = resolve_history(exp_dir)
+        print(f"  Full history: {len(hist)} run(s)")
 
-    db = load_database_log(exp_dir)
-    ev = load_eval_log(exp_dir)
+    db = load_database_log(exp_dir, full_history=args.full_history)
+    ev = load_eval_log(exp_dir, full_history=args.full_history)
 
     if not db:
         print("  No database log found.")
@@ -232,8 +319,11 @@ def cmd_llm(args: argparse.Namespace) -> None:
     exp_dir = resolve_experiment(args.experiment)
     out_dir = _out_dir(exp_dir, "llm")
     print(f"Experiment: {exp_dir}")
+    if args.full_history:
+        hist = resolve_history(exp_dir)
+        print(f"  Full history: {len(hist)} run(s)")
 
-    records = load_sampler_log(exp_dir)
+    records = load_sampler_log(exp_dir, full_history=args.full_history)
     if not records:
         print("  No sampler log found.")
         return
@@ -293,6 +383,158 @@ def cmd_llm(args: argparse.Namespace) -> None:
 
 
 # ===========================================================================
+# Subcommand: tokens
+# ===========================================================================
+
+
+def _estimate_tokens(text: str, encoder=None) -> int:
+    """Estimate token count. Use tiktoken if available, else chars/4."""
+    if encoder is not None:
+        return len(encoder.encode(text))
+    return max(1, len(text) // 4)
+
+
+def _load_tiktoken_encoder(model: str):
+    """Try to load a tiktoken encoder for the given model."""
+    try:
+        import tiktoken
+        # Map local model names to tiktoken encoding names
+        if "gpt-4" in model.lower():
+            return tiktoken.encoding_for_model("gpt-4")
+        if "gpt-3.5" in model.lower() or "gpt-35" in model.lower():
+            return tiktoken.encoding_for_model("gpt-3.5-turbo")
+        if "qwen" in model.lower():
+            # Qwen uses cl100k_base-like encoding
+            return tiktoken.get_encoding("cl100k_base")
+        return tiktoken.encoding_for_model("gpt-3.5-turbo")
+    except Exception:
+        return None
+
+
+def cmd_tokens(args: argparse.Namespace) -> None:
+    exp_dir = resolve_experiment(args.experiment)
+    out_dir = _out_dir(exp_dir, "tokens")
+    print(f"Experiment: {exp_dir}")
+    if args.full_history:
+        hist = resolve_history(exp_dir)
+        print(f"  Full history: {len(hist)} run(s)")
+
+    records = load_sampler_log(exp_dir, full_history=args.full_history)
+    if not records:
+        print("  No sampler log found.")
+        return
+
+    # Try to load tiktoken for the dominant model
+    dominant_model = Counter(r.get("model", "unknown") for r in records).most_common(1)[0][0]
+    encoder = _load_tiktoken_encoder(dominant_model)
+    method = "tiktoken" if encoder else "chars/4 heuristic"
+    print(f"  Tokenizer: {method} (model={dominant_model})")
+
+    total_input = 0
+    total_output = 0
+    total_extracted = 0
+    per_model: dict[str, dict] = {}
+
+    for r in records:
+        model = r.get("model", "unknown")
+        if model not in per_model:
+            per_model[model] = {"calls": 0, "input": 0, "output": 0, "extracted": 0}
+
+        inp = _estimate_tokens(r.get("prompt", ""), encoder)
+        out = _estimate_tokens(r.get("raw_response", ""), encoder)
+        ext = _estimate_tokens(r.get("extracted_code", ""), encoder)
+
+        total_input += inp
+        total_output += out
+        total_extracted += ext
+        per_model[model]["calls"] += 1
+        per_model[model]["input"] += inp
+        per_model[model]["output"] += out
+        per_model[model]["extracted"] += ext
+
+    total = total_input + total_output
+
+    # Rough cost map (USD per 1M tokens) — update as needed
+    cost_map = {
+        "gpt-4": {"input": 30.0, "output": 60.0},
+        "gpt-4o": {"input": 5.0, "output": 15.0},
+        "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
+        "qwen": {"input": 0.0, "output": 0.0},  # local = free
+    }
+    # Determine cost rate
+    rate = {"input": 0.0, "output": 0.0}
+    for key, rates in cost_map.items():
+        if key in dominant_model.lower():
+            rate = rates
+            break
+
+    est_cost = (total_input / 1e6) * rate["input"] + (total_output / 1e6) * rate["output"]
+
+    lines = [
+        f"# Token Usage Report",
+        f"",
+        f"**Method:** {method}",
+        f"**Total LLM calls:** {len(records)}",
+        f"",
+        f"## Overall",
+        f"| Metric | Tokens |",
+        f"|---|---|",
+        f"| Input (prompts) | {total_input:,} |",
+        f"| Output (raw responses) | {total_output:,} |",
+        f"| Extracted code | {total_extracted:,} |",
+        f"| **Total** | **{total:,}** |",
+        f"",
+        f"## Per Model",
+        f"| Model | Calls | Input | Output | Extracted |",
+        f"|---|---|---|---|---|",
+    ]
+    for model, stats in sorted(per_model.items()):
+        lines.append(
+            f"| {model} | {stats['calls']} | {stats['input']:,} | {stats['output']:,} | {stats['extracted']:,} |"
+        )
+
+    if rate["input"] > 0 or rate["output"] > 0:
+        lines.extend([
+            f"",
+            f"## Estimated Cost",
+            f"| Rate | USD |",
+            f"|---|---|",
+            f"| Input / 1M tokens | ${rate['input']:.2f} |",
+            f"| Output / 1M tokens | ${rate['output']:.2f} |",
+            f"| **Estimated total** | **${est_cost:.4f}** |",
+        ])
+    else:
+        lines.extend([
+            f"",
+            f"## Estimated Cost",
+            f"Model appears to be local (no API cost).",
+        ])
+
+    # Per-call histogram data (binned by 100-token buckets)
+    output_buckets: Counter = Counter()
+    for r in records:
+        out = _estimate_tokens(r.get("raw_response", ""), encoder)
+        output_buckets[out // 100 * 100] += 1
+
+    lines.extend([
+        f"",
+        f"## Output Token Distribution",
+        f"| Bucket (tokens) | Count |",
+        f"|---|---|",
+    ])
+    for bucket in sorted(output_buckets):
+        lines.append(f"| {bucket}-{bucket+99} | {output_buckets[bucket]} |")
+
+    md_path = out_dir / "tokens.md"
+    md_path.write_text("\n".join(lines))
+    print(f"  report -> {md_path.name}")
+    print(f"  Total tokens: {total:,}  (input {total_input:,} + output {total_output:,})")
+    if est_cost > 0:
+        print(f"  Est. cost: ${est_cost:.4f}")
+    print(f"Done -> {out_dir}/")
+
+
+# ===========================================================================
 # Subcommand: summary
 # ===========================================================================
 
@@ -301,11 +543,14 @@ def cmd_summary(args: argparse.Namespace) -> None:
     exp_dir = resolve_experiment(args.experiment)
     out_dir = _out_dir(exp_dir, "summary")
     print(f"Experiment: {exp_dir}")
+    if args.full_history:
+        hist = resolve_history(exp_dir)
+        print(f"  Full history: {len(hist)} run(s)")
 
-    data = load_final_results(exp_dir)
-    db = load_database_log(exp_dir)
-    ev = load_eval_log(exp_dir)
-    sampler = load_sampler_log(exp_dir)
+    data = load_final_results(exp_dir, full_history=args.full_history)
+    db = load_database_log(exp_dir, full_history=args.full_history)
+    ev = load_eval_log(exp_dir, full_history=args.full_history)
+    sampler = load_sampler_log(exp_dir, full_history=args.full_history)
     meta = load_meta(exp_dir)
 
     # Prefer live data for in-progress runs, fall back to final snapshot
@@ -434,6 +679,15 @@ def main() -> None:
     p_evo = sub.add_parser("evolution", help="Score trajectory plots")
     p_evo.add_argument("experiment", nargs="?", default=None,
                        help="Experiment dir or run_funsearch/ path")
+    p_evo.add_argument("--full-history", action="store_true",
+                       help="Follow resumed_from chain in meta.json")
+
+    # islands
+    p_isl = sub.add_parser("islands", help="Per-island score evolution")
+    p_isl.add_argument("experiment", nargs="?", default=None,
+                       help="Experiment dir or run_funsearch/ path")
+    p_isl.add_argument("--full-history", action="store_true",
+                       help="Follow resumed_from chain in meta.json")
 
     # programs
     p_prog = sub.add_parser("programs", help="Extract and compare programs")
@@ -444,18 +698,31 @@ def main() -> None:
     p_llm = sub.add_parser("llm", help="LLM behavior analysis")
     p_llm.add_argument("experiment", nargs="?", default=None,
                        help="Experiment dir or run_funsearch/ path")
+    p_llm.add_argument("--full-history", action="store_true",
+                       help="Follow resumed_from chain in meta.json")
+
+    # tokens
+    p_tok = sub.add_parser("tokens", help="Token usage analysis")
+    p_tok.add_argument("experiment", nargs="?", default=None,
+                       help="Experiment dir or run_funsearch/ path")
+    p_tok.add_argument("--full-history", action="store_true",
+                       help="Follow resumed_from chain in meta.json")
 
     # summary
     p_sum = sub.add_parser("summary", help="One-page dashboard")
     p_sum.add_argument("experiment", nargs="?", default=None,
                        help="Experiment dir or run_funsearch/ path")
+    p_sum.add_argument("--full-history", action="store_true",
+                       help="Follow resumed_from chain in meta.json")
 
     args = parser.parse_args()
 
     dispatch = {
         "evolution": cmd_evolution,
+        "islands": cmd_islands,
         "programs": cmd_programs,
         "llm": cmd_llm,
+        "tokens": cmd_tokens,
         "summary": cmd_summary,
     }
     dispatch[args.command](args)

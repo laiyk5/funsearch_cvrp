@@ -164,6 +164,76 @@ def gap_score(distance: float, optimal: float) -> float:
     return (distance - optimal) / optimal
 
 
+def make_savings_solver(
+    savings_fn: Callable[..., float],
+    two_opt: bool = True,
+) -> Callable[[CVRPInstance], Solution]:
+    """Build a Clarke-Wright-style savings solver using `savings_fn`.
+
+    The algorithm starts with individual routes (depot -> customer -> depot),
+    computes savings for merging every pair of routes, and repeatedly merges
+    the pair with the highest positive savings until no more merges are
+    feasible.
+
+    Args:
+        savings_fn: ``(i, j, instance) -> float``.  Higher is better.
+        two_opt: Whether to apply 2-opt improvement to each route after
+            construction.
+
+    Returns:
+        ``solver(instance) -> Solution``
+    """
+    from funsearch_cvrp.cvrp.baselines import two_opt_route
+
+    def solver(instance: CVRPInstance) -> Solution:
+        n = instance.n_customers
+        demands = instance.demands
+        capacity = instance.capacity
+
+        # Start with individual routes
+        routes: list[Route] = [[i] for i in range(1, n + 1)]
+        route_demand = [demands[i] for i in range(1, n + 1)]
+
+        # Build all possible merges
+        merges = []
+        for ri in range(len(routes)):
+            for rj in range(ri + 1, len(routes)):
+                i = routes[ri][-1]  # last node of route i
+                j = routes[rj][0]   # first node of route j
+                # Try both orientations: i->j and j->i
+                s_ij = savings_fn(i=i, j=j, instance=instance)
+                s_ji = savings_fn(i=j, j=i, instance=instance)
+                merges.append((s_ij, ri, rj, False))  # ri -> rj
+                merges.append((s_ji, rj, ri, False))  # rj -> ri (as ri->rj)
+
+        merges.sort(key=lambda x: x[0], reverse=True)
+
+        merged = [False] * len(routes)
+
+        for score, ri, rj, _ in merges:
+            if score <= 0:
+                continue
+            if merged[ri] or merged[rj]:
+                continue
+            if route_demand[ri] + route_demand[rj] > capacity:
+                continue
+
+            # Merge route rj after route ri
+            routes[ri].extend(routes[rj])
+            route_demand[ri] += route_demand[rj]
+            merged[rj] = True
+
+        # Keep only non-merged routes
+        final = [routes[i] for i in range(len(routes)) if not merged[i]]
+
+        if two_opt:
+            final = [two_opt_route(instance, r) for r in final]
+
+        return final
+
+    return solver
+
+
 def evaluate_solver(instances: list[CVRPInstance], solver: Callable[[CVRPInstance], Solution]) -> dict:
     """
     Evaluate a solver on a list of instances, returning average distance and average number of routes.
