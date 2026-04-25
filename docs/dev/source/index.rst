@@ -9,6 +9,7 @@ FunSearch CVRP Developer Docs
    baselines
    funsearch
    data
+   design_notes
 
 Introduction
 ------------

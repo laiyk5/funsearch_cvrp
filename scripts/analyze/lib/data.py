@@ -84,7 +84,8 @@ def _load_rolling(subdir: str, stem: str, exp_dir: Path | None = None) -> list[d
 
 def load_final_results(exp_dir: Path | None = None) -> dict:
     """Load ``funsearch_results.json`` (the final snapshot)."""
-    return json.loads((resolve_experiment(exp_dir) / "funsearch_results.json").read_text())
+    p = resolve_experiment(exp_dir) / "funsearch_results.json"
+    return json.loads(p.read_text()) if p.exists() else {}
 
 
 def load_database_log(exp_dir: Path | None = None) -> list[dict]:

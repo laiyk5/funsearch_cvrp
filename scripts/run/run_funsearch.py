@@ -99,6 +99,12 @@ class LimitedSampler(sampler.Sampler):
         database_log_path: Path | None = None,
         log_roll_every: int = 0,
         log_dir: Path | None = None,
+        test_inputs: list | None = None,
+        test_sandbox=None,
+        function_to_evolve: str = "",
+        evaluate_fn=None,
+        test_eval_path: Path | None = None,
+        test_eval_every: int = 0,
     ) -> None:
         super().__init__(database, evaluators, llm)
         self._max_iterations = max_iterations
@@ -109,6 +115,12 @@ class LimitedSampler(sampler.Sampler):
         self._log_roll_every = log_roll_every
         self._log_dir = log_dir
         self._last_rolled_block = start_iteration // log_roll_every if log_roll_every else 0
+        self._test_inputs = test_inputs or []
+        self._test_sandbox = test_sandbox
+        self._function_to_evolve = function_to_evolve
+        self._evaluate_fn = evaluate_fn
+        self._test_eval_path = test_eval_path
+        self._test_eval_every = test_eval_every
 
     @property
     def iteration(self) -> int:
@@ -198,6 +210,52 @@ class LimitedSampler(sampler.Sampler):
 
         _logger.info("Rolled evolution.log -> %s", archived_log.name)
 
+    def _evaluate_best_on_test(self) -> None:
+        """Evaluate the current best program on held-out test inputs."""
+        if not self._test_inputs or not self._test_sandbox or not self._test_eval_path:
+            return
+
+        # Find the best program overall across islands
+        best = None
+        best_score = -float("inf")
+        for island_id in range(len(self._database._islands)):
+            p = self._database._best_program_per_island[island_id]
+            s = self._database._best_score_per_island[island_id]
+            if p is not None and s > best_score:
+                best = p
+                best_score = s
+
+        if best is None:
+            return
+
+        scores_per_test = {}
+        for idx, test_input in enumerate(self._test_inputs):
+            result, runs_ok = self._test_sandbox.run(
+                str(best).strip(),
+                self._function_to_evolve,
+                self._evaluate_fn,
+                test_input,
+                30,
+            )
+            if runs_ok and result is not None:
+                scores_per_test[idx] = result
+
+        if scores_per_test:
+            test_score = scores_per_test[list(scores_per_test.keys())[-1]]
+            record = {
+                "iteration": self._iteration,
+                "train_best": best_score,
+                "test_score": test_score,
+                "scores_per_test": scores_per_test,
+                "timestamp": time.time(),
+            }
+            with open(self._test_eval_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+            _logger.info(
+                "TEST EVAL iter=%d train=%.4f test=%.4f",
+                self._iteration, best_score, test_score,
+            )
+
     def sample(self) -> None:
         while self._iteration < self._max_iterations:
             generation_time = time.time()
@@ -215,6 +273,9 @@ class LimitedSampler(sampler.Sampler):
                 self._iteration += 1
                 self._log_database()
                 self._maybe_roll_log()
+
+                if self._test_eval_every > 0 and self._iteration % self._test_eval_every == 0:
+                    self._evaluate_best_on_test()
 
                 if self._checkpoint_every > 0 and self._checkpoint_path:
                     if self._iteration % self._checkpoint_every == 0:
@@ -528,6 +589,18 @@ def main() -> None:
         default=None,
         help="Limit number of CVRP instances to evaluate",
     )
+    parser.add_argument(
+        "--test-split",
+        type=float,
+        default=0.0,
+        help="Fraction of instances to hold out for test evaluation (default: 0.0 = no holdout)",
+    )
+    parser.add_argument(
+        "--test-eval-every",
+        type=int,
+        default=10,
+        help="Evaluate best program on test set every N iterations (default: 10)",
+    )
 
     args = parser.parse_args()
 
@@ -540,17 +613,51 @@ def main() -> None:
     inputs = [(inst, cost) for inst, _, cost in instances_sols]
     _logger.info(f"Loaded {len(inputs)} CVRP instances with known optima from {folder}")
 
+    # Split into train / test for generalization evaluation
+    train_inputs = inputs
+    test_inputs = []
+    if args.test_split > 0 and len(inputs) > 1:
+        import random
+        random.seed(42)
+        shuffled = list(inputs)
+        random.shuffle(shuffled)
+        n_test = max(1, int(len(shuffled) * args.test_split))
+        test_inputs = shuffled[:n_test]
+        train_inputs = shuffled[n_test:]
+        _logger.info(
+            "Train/test split: %d train, %d test (%.0f%% held out)",
+            len(train_inputs), len(test_inputs), args.test_split * 100,
+        )
+
     # Build config
     config = build_config(args)
 
     # Determine output directory.  When resuming without an explicit output-dir,
-    # reuse the checkpoint's directory so that history, logs, and best-program
-    # snapshots continue in the same place.
+    # create a fresh directory and copy the checkpoint so the original run stays
+    # intact.  The new run loads the copied checkpoint and writes all new files
+    # (logs, eval, best-program, etc.) into the new directory.
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+    _resumed_from = None
+    if args.resume:
+        _resumed_from = str(Path(args.resume).resolve())
+
     if args.output_dir:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
     elif args.resume:
-        output_dir = Path(args.resume).resolve().parent
+        resume_source = Path(args.resume).resolve()
+        output_dir = get_output_dir("run_funsearch", args={
+            "iterations": args.iterations,
+            "mock_llm": args.mock_llm,
+            "model": config.llm.model if config.llm else "mock",
+        })
+        checkpoint_dest = output_dir / "checkpoint.pkl"
+        import shutil
+        shutil.copy2(resume_source, checkpoint_dest)
+        _logger.info("Copied checkpoint from %s to %s", resume_source, checkpoint_dest)
+        args.resume = str(checkpoint_dest)
     else:
         output_dir = get_output_dir("run_funsearch", args={
             "iterations": args.iterations,
@@ -570,6 +677,8 @@ def main() -> None:
             "model": config.llm.model if config.llm else "mock",
         },
     }
+    if _resumed_from:
+        _run_entry["resumed_from"] = _resumed_from
     if _meta_file.exists():
         _meta = json.loads(_meta_file.read_text())
         _meta.setdefault("runs", []).append(_run_entry)
@@ -597,6 +706,9 @@ def main() -> None:
     _sampler_dir = output_dir / "sampler"
     _sampler_dir.mkdir(parents=True, exist_ok=True)
     sampler_log_path = _sampler_dir / "sampler.jsonl"
+    _test_dir = output_dir / "test"
+    _test_dir.mkdir(parents=True, exist_ok=True)
+    test_eval_path = _test_dir / "test_eval.jsonl"
 
     # Set up named logger with file + console handlers
     _logger.setLevel(logging.DEBUG)
@@ -643,7 +755,7 @@ def main() -> None:
     # Create sandbox
     sandbox = CrossPlatformSandbox()
 
-    # Create evaluators
+    # Create evaluators (train only)
     evaluators = []
     for _ in range(config.num_evaluators):
         evaluators.append(evaluator.Evaluator(
@@ -651,7 +763,7 @@ def main() -> None:
             template,
             function_to_evolve,
             evaluate_cvrp,
-            inputs,
+            train_inputs,
             sandbox=sandbox,
             eval_history_path=eval_history_path,
         ))
@@ -696,6 +808,12 @@ def main() -> None:
         database_log_path=database_log_path,
         log_roll_every=1000,
         log_dir=output_dir,
+        test_inputs=test_inputs,
+        test_sandbox=sandbox,
+        function_to_evolve=function_to_evolve,
+        evaluate_fn=evaluate_cvrp,
+        test_eval_path=test_eval_path,
+        test_eval_every=args.test_eval_every,
     )
 
     _logger.info("Starting FunSearch...")
@@ -710,12 +828,15 @@ def main() -> None:
         metadata={"completed_iterations": limited_sampler.iteration},
     )
 
+    # Final test evaluation
+    limited_sampler._evaluate_best_on_test()
+
     # Save results
     save_funsearch_results(
         output_dir,
         database,
         config,
-        inputs,
+        train_inputs,
         duration,
         llm_calls=limited_sampler._iteration,
     )

@@ -37,6 +37,7 @@ from scripts.analyze.lib.data import (
     load_database_log,
     load_eval_log,
     load_sampler_log,
+    load_meta,
 )
 
 
@@ -305,13 +306,36 @@ def cmd_summary(args: argparse.Namespace) -> None:
     db = load_database_log(exp_dir)
     ev = load_eval_log(exp_dir)
     sampler = load_sampler_log(exp_dir)
+    meta = load_meta(exp_dir)
 
+    # Prefer live data for in-progress runs, fall back to final snapshot
     config = data.get("config", {})
     overall = data.get("overall_best")
+    duration = data.get("duration_seconds", 0)
+    best = data.get("best_programs", [])
+
+    if db:
+        overall = db[-1].get("overall_best", overall)
+        duration = db[-1].get("timestamp", 0) - db[0].get("timestamp", 0)
+        num_islands = len(db[-1].get("best_score_per_island", []))
+        if num_islands:
+            config.setdefault("num_islands", num_islands)
+        # Build best-programs snapshot from live db
+        scores = db[-1].get("best_score_per_island", [])
+        best = [{"island_id": i, "best_score": s, "program": ""}
+                for i, s in enumerate(scores)]
+
+    # Get model info from meta.json args if not in config
+    runs = meta.get("runs", [])
+    if runs and not config.get("llm_model"):
+        args = runs[-1].get("args", {})
+        config.setdefault("llm_model", args.get("model", "?"))
+
     n_evals = len([r for r in ev if r.get("accepted")])
     n_milestones = len([r for r in ev if r.get("is_milestone")])
     n_rejected = len([r for r in ev if not r.get("accepted")])
-    duration = data.get("duration_seconds", 0)
+    llm_calls = len(sampler) if sampler else data.get("llm_calls", "?")
+    iterations = db[-1]["iteration"] if db else llm_calls
 
     # Build a text summary
     lines = [
@@ -323,18 +347,17 @@ def cmd_summary(args: argparse.Namespace) -> None:
         "## Configuration",
         f"- Model: `{config.get('llm_model', '?')}`  temp={config.get('llm_temperature', '?')}",
         f"- Islands: {config.get('num_islands', '?')}  samples/prompt: {config.get('samples_per_prompt', '?')}",
-        f"- Iterations: {data.get('llm_calls', '?')}",
+        f"- Iterations: {iterations}",
         "",
         "## Results",
         f"- **Overall best score:** {overall:.4f}" if overall is not None else "- Overall best: N/A",
         f"- Accepted evaluations: {n_evals}",
         f"- Milestones (new best): {n_milestones}",
         f"- Rejected: {n_rejected}",
-        f"- LLM calls: {len(sampler)}",
+        f"- LLM calls: {llm_calls}",
         "",
         "## Best Programs",
     ]
-    best = data.get("best_programs", [])
     for p in sorted(best, key=lambda p: p["best_score"], reverse=True)[:5]:
         lines.append(f"- Island {p['island_id']}: score={p['best_score']:.4f} ({len(p.get('program',''))} chars)")
 
@@ -368,7 +391,11 @@ def cmd_summary(args: argparse.Namespace) -> None:
     ax3 = fig.add_subplot(gs[1, 0])
     labels = ["Accepted", "Rejected"]
     sizes = [n_evals, n_rejected]
-    ax3.pie(sizes, labels=labels, autopct="%1.0f%%", colors=["#2ecc71", "#e74c3c"])
+    if sum(sizes) > 0:
+        ax3.pie(sizes, labels=labels, autopct="%1.0f%%", colors=["#2ecc71", "#e74c3c"])
+    else:
+        ax3.text(0.5, 0.5, "No evaluation data yet", ha="center", va="center",
+                 transform=ax3.transAxes)
     ax3.set_title("Evaluation Outcomes")
 
     # Bottom-right: timing info
@@ -377,7 +404,7 @@ def cmd_summary(args: argparse.Namespace) -> None:
     info = [
         f"Model: {config.get('llm_model', '?')}",
         f"Islands: {config.get('num_islands', '?')}",
-        f"Iterations: {data.get('llm_calls', '?')}",
+        f"Iterations: {iterations}",
         f"Duration: {duration:.0f}s",
         f"Overall best: {overall:.4f}" if overall is not None else "",
         f"Milestones: {n_milestones}",
