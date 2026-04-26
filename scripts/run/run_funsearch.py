@@ -110,6 +110,7 @@ class LimitedSampler(sampler.Sampler):
         val_eval_path: Path | None = None,
         val_eval_every: int = 0,
         val_gap_threshold: float = 0.05,
+        val_per_island_path: Path | None = None,
     ) -> None:
         super().__init__(database, evaluators, llm)
         self._max_iterations = max_iterations
@@ -131,6 +132,7 @@ class LimitedSampler(sampler.Sampler):
         self._val_eval_path = val_eval_path
         self._val_eval_every = val_eval_every
         self._val_gap_threshold = val_gap_threshold
+        self._val_per_island_path = val_per_island_path
         self._current_gen_penalty = database._score_reduction_config.generalization_penalty
 
     @property
@@ -219,6 +221,16 @@ class LimitedSampler(sampler.Sampler):
             current_sampler.rename(archived_sampler)
         self._llm._sampler_log_path = current_sampler
 
+        # Roll val_per_island.jsonl
+        if self._val_per_island_path is not None:
+            val_island_dir = self._val_per_island_path.parent
+            val_island_dir.mkdir(parents=True, exist_ok=True)
+            current_val_island = self._val_per_island_path
+            archived_val_island = val_island_dir / f"val_per_island_iter_{start_it:06d}_{end_it:06d}.jsonl"
+            if current_val_island.exists():
+                current_val_island.rename(archived_val_island)
+            self._val_per_island_path = current_val_island
+
         _logger.info("Rolled evolution.log -> %s", archived_log.name)
 
     def _find_best_program(self) -> tuple[Any, float] | tuple[None, None]:
@@ -276,97 +288,156 @@ class LimitedSampler(sampler.Sampler):
     def _evaluate_best_on_validation(self) -> float | None:
         """Evaluate the current best program on validation inputs.
 
-        Returns the validation score, or None if no evaluation was performed.
+        Also evaluates every island's best program and writes per-island
+        records to val_per_island.jsonl for monitoring.
+
+        Returns the validation score of the overall best, or None if no
+        evaluation was performed.
         """
         if not self._val_inputs or not self._val_sandbox or not self._val_eval_path:
             return None
 
+        # ------------------------------------------------------------------
+        # 1. Overall best (for feedback loop)
+        # ------------------------------------------------------------------
         best, best_score = self._find_best_program()
-        if best is None:
-            return None
+        overall_val_reduced = None
+        if best is not None:
+            scores_per_test = {}
+            for idx, val_input in enumerate(self._val_inputs):
+                result, runs_ok = self._val_sandbox.run(
+                    str(best).strip(),
+                    self._function_to_evolve,
+                    self._evaluate_fn,
+                    val_input,
+                    30,
+                )
+                if runs_ok and result is not None:
+                    scores_per_test[idx] = result
 
-        scores_per_test = {}
-        for idx, val_input in enumerate(self._val_inputs):
-            result, runs_ok = self._val_sandbox.run(
-                str(best).strip(),
-                self._function_to_evolve,
-                self._evaluate_fn,
-                val_input,
-                30,
-            )
-            if runs_ok and result is not None:
-                scores_per_test[idx] = result
+            if scores_per_test:
+                val_config = programs_database.ScoreReductionConfig(
+                    method=self._database._score_reduction_config.method,
+                    generalization_penalty=0.0,
+                )
+                overall_val_reduced = programs_database._reduce_score(scores_per_test, val_config)
 
-        if not scores_per_test:
-            return None
+                train_clean = best_score
+                if self._current_gen_penalty > 0:
+                    train_config = programs_database.ScoreReductionConfig(
+                        method=self._database._score_reduction_config.method,
+                        generalization_penalty=0.0,
+                    )
+                    best_island = None
+                    for i in range(len(self._database._islands)):
+                        if self._database._best_program_per_island[i] is best:
+                            best_island = i
+                            break
+                    if best_island is not None:
+                        raw_scores = self._database._best_scores_per_test_per_island[best_island]
+                        if raw_scores:
+                            train_clean = programs_database._reduce_score(raw_scores, train_config)
 
-        # Compute a fair comparison using the same reduction method
-        # without the generalization penalty so the gap is not confounded.
-        val_config = programs_database.ScoreReductionConfig(
-            method=self._database._score_reduction_config.method,
-            generalization_penalty=0.0,
-        )
-        val_reduced = programs_database._reduce_score(scores_per_test, val_config)
+                gap = train_clean - overall_val_reduced
+                record = {
+                    "iteration": self._iteration,
+                    "train_best": best_score,
+                    "train_clean": train_clean,
+                    "val_score": overall_val_reduced,
+                    "gap": gap,
+                    "scores_per_test": scores_per_test,
+                    "gen_penalty": self._current_gen_penalty,
+                    "timestamp": time.time(),
+                }
+                with open(self._val_eval_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record) + "\n")
 
-        # Also compute a clean train score for the same island.
-        train_clean = best_score
-        if self._current_gen_penalty > 0:
-            train_config = programs_database.ScoreReductionConfig(
-                method=self._database._score_reduction_config.method,
-                generalization_penalty=0.0,
-            )
-            # Find the island that holds the best program to retrieve its raw scores.
-            best_island = None
-            for i in range(len(self._database._islands)):
-                if self._database._best_program_per_island[i] is best:
-                    best_island = i
-                    break
-            if best_island is not None:
-                raw_scores = self._database._best_scores_per_test_per_island[best_island]
-                if raw_scores:
-                    train_clean = programs_database._reduce_score(raw_scores, train_config)
+                # Feedback loop
+                prev_penalty = self._current_gen_penalty
+                if gap > self._val_gap_threshold:
+                    self._current_gen_penalty = min(1.0, self._current_gen_penalty * 1.3 + 0.01)
+                elif gap < self._val_gap_threshold * 0.3:
+                    self._current_gen_penalty = max(0.0, self._current_gen_penalty * 0.9)
 
-        gap = train_clean - val_reduced
-        record = {
-            "iteration": self._iteration,
-            "train_best": best_score,
-            "train_clean": train_clean,
-            "val_score": val_reduced,
-            "gap": gap,
-            "scores_per_test": scores_per_test,
-            "gen_penalty": self._current_gen_penalty,
-            "timestamp": time.time(),
-        }
-        with open(self._val_eval_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record) + "\n")
+                if abs(self._current_gen_penalty - prev_penalty) > 1e-6:
+                    self._database._score_reduction_config.generalization_penalty = (
+                        self._current_gen_penalty
+                    )
+                    _logger.warning(
+                        "VAL FEEDBACK iter=%d train=%.4f val=%.4f gap=%.4f "
+                        "gen_penalty %.4f -> %.4f",
+                        self._iteration, train_clean, overall_val_reduced, gap,
+                        prev_penalty, self._current_gen_penalty,
+                    )
+                else:
+                    _logger.info(
+                        "VAL EVAL iter=%d train=%.4f val=%.4f gap=%.4f penalty=%.4f",
+                        self._iteration, train_clean, overall_val_reduced, gap,
+                        self._current_gen_penalty,
+                    )
 
-        # Feedback loop: adjust generalization penalty based on validation gap.
-        # If the model overfits (large gap), increase penalty.
-        # If it generalizes well (small gap), gradually decrease penalty.
-        prev_penalty = self._current_gen_penalty
-        if gap > self._val_gap_threshold:
-            self._current_gen_penalty = min(1.0, self._current_gen_penalty * 1.3 + 0.01)
-        elif gap < self._val_gap_threshold * 0.3:
-            self._current_gen_penalty = max(0.0, self._current_gen_penalty * 0.9)
+        # ------------------------------------------------------------------
+        # 2. Per-island validation (for monitoring)
+        # ------------------------------------------------------------------
+        if self._val_per_island_path is not None:
+            evaluated_count = 0
+            for island_id in range(len(self._database._islands)):
+                p = self._database._best_program_per_island[island_id]
+                s = self._database._best_score_per_island[island_id]
+                if p is None:
+                    continue
 
-        if abs(self._current_gen_penalty - prev_penalty) > 1e-6:
-            self._database._score_reduction_config.generalization_penalty = (
-                self._current_gen_penalty
-            )
-            _logger.warning(
-                "VAL FEEDBACK iter=%d train=%.4f val=%.4f gap=%.4f "
-                "gen_penalty %.4f -> %.4f",
-                self._iteration, train_clean, val_reduced, gap,
-                prev_penalty, self._current_gen_penalty,
-            )
-        else:
-            _logger.info(
-                "VAL EVAL iter=%d train=%.4f val=%.4f gap=%.4f penalty=%.4f",
-                self._iteration, train_clean, val_reduced, gap,
-                self._current_gen_penalty,
-            )
+                scores_per_test = {}
+                for idx, val_input in enumerate(self._val_inputs):
+                    result, runs_ok = self._val_sandbox.run(
+                        str(p).strip(),
+                        self._function_to_evolve,
+                        self._evaluate_fn,
+                        val_input,
+                        30,
+                    )
+                    if runs_ok and result is not None:
+                        scores_per_test[idx] = result
 
-        return val_reduced
+                if scores_per_test:
+                    val_config = programs_database.ScoreReductionConfig(
+                        method=self._database._score_reduction_config.method,
+                        generalization_penalty=0.0,
+                    )
+                    val_reduced = programs_database._reduce_score(scores_per_test, val_config)
+
+                    train_clean = s
+                    if self._current_gen_penalty > 0:
+                        train_config = programs_database.ScoreReductionConfig(
+                            method=self._database._score_reduction_config.method,
+                            generalization_penalty=0.0,
+                        )
+                        raw_scores = self._database._best_scores_per_test_per_island[island_id]
+                        if raw_scores:
+                            train_clean = programs_database._reduce_score(raw_scores, train_config)
+
+                    gap = train_clean - val_reduced
+                    record = {
+                        "iteration": self._iteration,
+                        "island_id": island_id,
+                        "train_score": s,
+                        "train_clean": train_clean,
+                        "val_score": val_reduced,
+                        "gap": gap,
+                        "scores_per_test": scores_per_test,
+                        "timestamp": time.time(),
+                    }
+                    with open(self._val_per_island_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(record) + "\n")
+                    evaluated_count += 1
+
+            if evaluated_count > 0:
+                _logger.info(
+                    "VAL PER-ISLAND iter=%d evaluated %d/%d islands",
+                    self._iteration, evaluated_count, len(self._database._islands),
+                )
+
+        return overall_val_reduced
 
     def sample(self) -> None:
         while self._iteration < self._max_iterations:
@@ -994,6 +1065,7 @@ def main() -> None:
     _val_dir = output_dir / "val"
     _val_dir.mkdir(parents=True, exist_ok=True)
     val_eval_path = _val_dir / "val_eval.jsonl"
+    val_per_island_path = _val_dir / "val_per_island.jsonl"
 
     # Set up named logger with file + console handlers
     _logger.setLevel(logging.DEBUG)
@@ -1103,6 +1175,7 @@ def main() -> None:
         val_eval_path=val_eval_path,
         val_eval_every=args.val_eval_every,
         val_gap_threshold=0.05,
+        val_per_island_path=val_per_island_path,
     )
 
     _logger.info("Starting FunSearch...")

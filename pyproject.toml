@@ -70,6 +70,7 @@ indent-style = "space"
 [dependency-groups]
 dev = [
     "hatch>=1.16.5",
+    "py7zr>=1.1.0",
     "pytest>=7.0.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.1.0",
