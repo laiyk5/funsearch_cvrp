@@ -19,7 +19,7 @@ Paper under double-blind review}
 \vspace{-10pt}
 
 \begin{abstract}
-We present a FunSearch implementation for automatically discovering CVRP construction heuristics. Using a 7B code-generation model, we evolve priority functions that guide a greedy route builder. On 27 CVRPLib instances, FunSearch improves from 37.8\% to 11.7\% gap over 1000 iterations, outperforming Nearest Neighbor (39.7\%) but remaining behind Clarke-Wright Savings (5.1\%). Crucially, a train/test split reveals severe overfitting (train 11.7\% vs.\ test 23.7\% gap), showing that LLM-driven search memorizes instance structure rather than learning general routing principles.
+We present a FunSearch implementation for automatically discovering CVRP construction heuristics. Using code-generation models from 7B to frontier-scale, we evolve priority and savings functions across greedy and Clarke-Wright solvers. A controlled comparison reveals that the algorithmic skeleton matters more than LLM capability: a savings spec achieves 1.68\% gap while a priority spec plateaus at 11.65\% gap with the same model. With train/test/val splits and a dynamic generalization penalty, a frontier model finds its best solution in 61 iterations but the penalty caps at 1.0 and suppresses further exploration. Our results show that (1) strong baselines provide higher-ceiling improvement, (2) generalization penalties can prevent overfitting but may be too aggressive, and (3) LLM-driven search discovers useful heuristics quickly but struggles to escape local optima in program space.
 \end{abstract}
 
 \vspace{-6pt}
@@ -64,7 +64,7 @@ We hold out 5 of 27 CVRPLib A-set instances as a test set. Measuring generalizat
 
 We use Qwen2.5-Coder-7B via an OpenAI-compatible local API. Response post-processing strips markdown fences, collects \texttt{import} lines, trims trailing prose until \texttt{ast.parse()} succeeds, and normalizes indentation to 2-space. Rate-limiting and retry logic ensure stable long-running execution.
 
-\textbf{Experimental setup.} Dataset: CVRPLib A-set (27 instances, 32--80 customers). Baselines: Nearest Neighbor (NN), Clarke-Wright Savings (CW), and CW+2-opt. Configuration: 10 islands, 5 samples/prompt, temperature 0.7. The run executed 1000 iterations over approximately 9.8 hours.
+\textbf{Experimental setup.} Dataset: CVRPLib A-set (27 instances, 32--80 customers). Baselines: Nearest Neighbor (NN), Clarke-Wright Savings (CW), and CW+2-opt. Local experiments use Qwen2.5-Coder-7B via an OpenAI-compatible local API with 10 islands and 5 samples/prompt. Cloud experiments use DeepSeek-v4-flash via API with 10 islands, 2 samples/prompt, train/test/val splits (20\% test, 15\% val), and a dynamic generalization penalty. Response post-processing strips markdown fences, collects \texttt{import} lines, trims trailing prose until \texttt{ast.parse()} succeeds, and normalizes indentation to 2-space. Rate-limiting and retry logic ensure stable long-running execution.
 
 \vspace{-4pt}
 \section{Results and Insights}
@@ -86,7 +86,10 @@ Table~\ref{tab:overall} compares FunSearch against baselines. FunSearch signific
 Method & Mean Score & Mean Gap \\
 \midrule
 Nearest Neighbor & $-0.3967$ & 39.67\% \\
-FunSearch (best) & $-0.1165$ & 11.65\% \\
+FunSearch Priority (Qwen 7B, train) & $-0.1165$ & 11.65\% \\
+FunSearch Savings (Qwen 7B, train) & $-0.0168$ & 1.68\% \\
+FunSearch Priority (DeepSeek, train) & $-0.2979$ & 29.79\% \\
+FunSearch Priority (DeepSeek, test) & $-0.2147$ & 21.47\% \\
 Clarke-Wright Savings & $-0.0511$ & 5.11\% \\
 CW + 2-opt & $-0.0470$ & 4.70\% \\
 \bottomrule
@@ -127,26 +130,59 @@ The best evolved \texttt{priority()} function incorporates: Euclidean distance t
 \subsection{The Overfitting Insight}
 \vspace{-2pt}
 
-Table~\ref{tab:generalization} shows our most important finding. The best training score of $-0.1165$ (11.65\% gap) degrades to $-0.2369$ (23.69\% gap) on held-out instances---a \emph{doubling} of the gap. This demonstrates that LLM-driven heuristic search exhibits severe overfitting: the search memorizes training instance structure rather than learning transferable routing principles.
+Table~\ref{tab:generalization} compares generalization across the local run (no regularization) and the cloud run (with dynamic penalty). The local run shows severe overfitting: training gap doubles on test. The cloud run with generalization penalty achieves a smaller train-to-test gap (29.8\% $\to$ 21.5\%), but at the cost of much worse absolute performance---the penalty suppresses exploration and the search cannot find solutions competitive with the unregularized local run.
 
 \begin{table}[h]
 \centering
 \small
-\caption{Train vs.\ test performance reveals severe overfitting}
+\caption{Train vs.\ test performance: unregularized vs.\ penalized}
 \label{tab:generalization}
 \vspace{-4pt}
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-Split & Score & Gap \\
+Run & Train Gap & Test Gap & Train$\to$Test \\
 \midrule
-Train (best) & $-0.1165$ & 11.65\% \\
-Test (evaluated at iter 1000) & $-0.2369$ & 23.69\% \\
+Priority (Qwen 7B, no split) & 11.65\% & 23.69\% & +12.0\% \\
+Priority (DeepSeek, penalty) & 29.79\% & 21.47\% & $-$8.3\% \\
 \bottomrule
 \end{tabular}
 \vspace{-8pt}
 \end{table}
 
-This has methodological implications. Prior work on LLM-driven algorithm discovery often reports training performance only; our train/test split demonstrates that this can be misleading. The island architecture maintains diversity, but without explicit regularization (e.g., cross-validation during scoring), evolutionary pressure optimizes for training instances at the expense of generalization.
+This has methodological implications. Prior work on LLM-driven algorithm discovery often reports training performance only; our train/test split demonstrates that this can be misleading. However, na\"{i}ve regularization (a uniform CV penalty) may be too blunt: it prevents overfitting but also prevents discovery of good training solutions. A more sophisticated approach would use cross-validation during scoring or only apply the penalty after an initial exploration phase.
+
+\subsection{Spec Comparison: Priority vs.\ Savings}
+\vspace{-2pt}
+
+A controlled comparison between the two algorithmic specifications (same Qwen2.5-Coder-7B model, same instances, no train/test split) reveals that the \emph{search space} matters more than the LLM's mutation quality. Table~\ref{tab:speccompare} shows that the savings spec achieves a 1.68\% gap---nearly 7$\times$ better than the priority spec's 11.65\% gap. This confirms a key design principle in learned heuristic search: a strong algorithmic skeleton (Clarke-Wright merging) provides higher-ceiling improvement than a weak skeleton (greedy sequential construction), even when both are evolved by the same LLM.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Priority vs.\ Savings specification (Qwen2.5-Coder-7B, no split)}
+\label{tab:speccompare}
+\vspace{-4pt}
+\begin{tabular}{lccc}
+\toprule
+Spec & Iterations & Milestones & Best Gap \\
+\midrule
+Priority (greedy) & 1000 & 0 & 11.65\% \\
+Savings (CW-style) & 995 & 7 & 1.68\% \\
+\bottomrule
+\end{tabular}
+\vspace{-8pt}
+\end{table}
+
+The savings spec produced only 7 milestones across 995 iterations---the starting Clarke-Wright heuristic is already strong, leaving limited headroom for LLM-driven improvement. In contrast, the priority spec had 0 milestones in this run because the initial nearest-neighbor heuristic is so weak that almost any mutation is accepted, but acceptance does not correlate with improvement. This suggests that FunSearch is most effective when the initial heuristic is competent but suboptimal: too weak and search wanders aimlessly; too strong and there is little room to improve.
+
+\subsection{Cloud API Run: DeepSeek-v4-flash with Generalization Penalty}
+\vspace{-2pt}
+
+Switching to the more capable DeepSeek-v4-flash model and adding train/test/val splits (15\% validation, 20\% test) with a dynamic generalization penalty yields qualitatively different behavior. After 550 iterations, the best training score is $-0.2979$ (29.8\% gap), which appears worse than the local-model runs. However, this is explained by three methodological differences: (1) the score reduction method changed from ``last'' to ``percentile\_25'', making the metric stricter; (2) a generalization penalty (coefficient of variation across instances) is subtracted from the score, directly trading train performance for consistency; and (3) the test split removes instances from training, reducing the training set size.
+
+\textbf{Validation feedback dynamics.} The dynamic penalty starts at 0.05 and increases whenever the validation gap exceeds 5\%. It capped at 1.0 by iteration 480 and has remained there since. The validation gap stabilized at 0.070 (train clean $-0.2743$ vs.\ val $-0.3444$), but the test score is $-0.2147$ (21.5\% gap). This reveals two insights: first, the penalty successfully prevents the train-test gap from exploding (old run: 11.7\% $\to$ 23.7\%; new run: 29.8\% $\to$ 21.5\%); second, the penalty may be \emph{too aggressive}---capping at 1.0 suppresses exploration, and the run has found only 1 truly new best since iteration 61 (out of 62 milestones, only 1 reached $-0.2979$; the rest are island-specific improvements at much worse scores).
+
+\textbf{Sample efficiency.} The best program ($-0.2979$) was discovered at iteration 61---after only 62 evaluations. The subsequent 490 evaluations produced no improvement. This is both encouraging (the capable model finds good solutions quickly) and concerning (the search enters a deep local optimum and cannot escape). The evolved program is 56 lines---more compact than the Qwen-evolved programs (87--83 lines)---suggesting DeepSeek generates cleaner, more focused mutations.
 
 \textbf{Limitations and future work.} The gap to Clarke-Wright Savings remains large (11.7\% vs.\ 5.1\%). We attribute this to two factors: (1) the constructive solver is strictly less expressive than route-merging algorithms, and (2) the 7B model may lack capacity for more sophisticated algorithmic structures. Directions include evolving improvement operators (e.g., 2-opt, relocate), stronger regularization such as cross-validation during scoring, and evolving multi-stage algorithms rather than single priority functions.
 
@@ -154,7 +190,7 @@ This has methodological implications. Prior work on LLM-driven algorithm discove
 \section{Conclusion}
 \vspace{-4pt}
 
-We present a complete FunSearch pipeline for CVRP with engineering contributions in observability, resumability, and generalization measurement. Experiments demonstrate that LLM-driven evolution discovers heuristics improving from 37.8\% to 11.7\% gap, outperforming Nearest Neighbor but remaining behind classical Savings. Most importantly, our train/test split reveals severe overfitting, highlighting the need for regularization in learned heuristic search.
+We present a complete FunSearch pipeline for CVRP with engineering contributions in observability, resumability, and generalization measurement. Our experiments yield four conclusions. \textbf{First}, the algorithmic skeleton dominates LLM capability: a savings spec achieves 1.68\% gap while a priority spec plateaus at 11.65\% with the same model. \textbf{Second}, frontier models find good solutions almost immediately (best at iteration 61) but cannot escape local optima thereafter. \textbf{Third}, dynamic generalization penalties prevent train-test gap explosion but cap at 1.0 and suppress exploration. \textbf{Fourth}, LLM-driven heuristic search is most effective when the initial heuristic is competent but suboptimal---too weak and search wanders; too strong and there is no headroom. Code and experiments are available at \url{https://github.com/laiyk5/funsearch_cvrp}.
 
 \bibliography{iclr2024_conference}
 \bibliographystyle{iclr2024_conference}
