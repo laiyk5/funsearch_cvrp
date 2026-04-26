@@ -54,7 +54,7 @@ FunSearch \citep{romero2023funsearch} treats program synthesis as evolutionary s
 
 We test two algorithmic skeletons. The \textbf{priority spec} uses greedy constructive search: a \texttt{priority(current\_node, candidate, instance, remaining\_capacity, route, route\_demand, unserved)} function scores each feasible next customer, and the highest is appended to the current route. The \textbf{savings spec} uses Clarke-Wright route merging: a \texttt{savings(i, j, instance)} function scores the benefit of merging the route ending at $i$ with the route starting at $j$. The baseline is $s_{ij} = c_{i0} + c_{0j} - c_{ij}$. Both specs provide a controlled comparison: same model, same instances, same evolution---only the skeleton differs.
 
-Evolution uses 10 islands with behavioral clustering (per-instance score signatures) to maintain diversity. The reduced score is the score on the \emph{last} (hardest) training instance. The fitness function maximizes $\text{score} = -(\text{distance} - \text{optimal}) / \text{optimal}$; invalid solutions receive $-10^9$. Response post-processing strips markdown, collects imports, validates with \texttt{ast.parse()}, and normalizes indentation to 2-space.
+Evolution uses 10 islands with behavioral clustering (per-instance score signatures) to maintain diversity. The reduced score aggregates per-instance scores: the Qwen runs use the \emph{last} (hardest) instance, while the DeepSeek runs use the 25th percentile for robustness. The fitness function maximizes $\text{score} = -(\text{distance} - \text{optimal}) / \text{optimal}$; invalid solutions receive $-10^9$. Response post-processing strips markdown, collects imports, validates with \texttt{ast.parse()}, and normalizes indentation to 2-space.
 
 Table~\ref{tab:settings} summarizes the four experiments. The Qwen Priority and Qwen Savings runs use Qwen2.5-Coder-7B on the full A-set with no split, providing a controlled spec comparison. The DeepSeek Priority and DeepSeek Savings runs use DeepSeek-v4-flash with train/val/test splits and a dynamic generalization penalty.
 
@@ -256,16 +256,16 @@ All experiments in the main paper were evaluated on the CVRPLib A-set (27 instan
 \toprule
 Experiment (Model / Spec) & Baseline Gap & Evolved Gap & Improvement \\
 \midrule
-Local Priority (Qwen 7B) & 25.47\% & 15.87\% & +9.60 pp \\
-Cloud Priority (DeepSeek) & 25.47\% & 17.81\% & +7.66 pp \\
-Local Savings (Qwen 7B) & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \\
-Cloud Savings (DeepSeek) & 6.01\% (CW) & 22.09\% & \textcolor{red}{$-$16.08 pp} \\
+Qwen 7B Priority & 25.47\% & 15.87\% & +9.60 pp \\
+DeepSeek Priority & 25.47\% & 17.81\% & +7.66 pp \\
+Qwen 7B Savings & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \\
+DeepSeek Savings & 6.01\% (CW) & 22.09\% & \textcolor{red}{$-$16.08 pp} \\
 \bottomrule
 \end{tabular}
 \vspace{-4pt}
 \end{table}
 
-\textbf{Key finding:} Priority-based evolved heuristics generalize well to larger instances. Both priority experiments achieve substantial improvements over the Nearest Neighbor baseline on the X-set, despite never having seen instances with more than 80 customers during training. The Local Priority run (Qwen 7B, no generalization penalty) achieves the best X-set performance at 15.87\% gap.
+\textbf{Key finding:} Priority-based evolved heuristics generalize well to larger instances. Both priority experiments achieve substantial improvements over the Nearest Neighbor baseline on the X-set, despite never having seen instances with more than 80 customers during training. The Qwen 7B Priority run (no generalization penalty) achieves the best X-set performance at 15.87\% gap.
 
 \textbf{Overfitting in savings specs:} Both Qwen and DeepSeek savings functions severely overfit. The Qwen-evolved savings achieves 1.68\% gap on the A-set but degrades to 19.84\% on the X-set---far worse than the hand-designed Clarke-Wright baseline (6.01\%). The DeepSeek savings function is even more brittle: 22.09\% gap on the X-set, a $-$16.08~pp regression versus CW. This confirms that the savings spec overfits to the small-instance structure of the training set. The learned merge rules exploit idiosyncrasies of A-set instance geometry that do not transfer to larger problems, and the more capable DeepSeek model overfits more aggressively.
 
@@ -281,13 +281,13 @@ Cloud Savings (DeepSeek) & 6.01\% (CW) & 22.09\% & \textcolor{red}{$-$16.08 pp} 
 \toprule
 Experiment (Model / Spec) & Baseline Cost & Evolved Cost & Improvement \\
 \midrule
-Cloud Priority (DeepSeek) & 579,810 & 551,067 & +4.96\% \\
+DeepSeek Priority & 579,810 & 551,067 & +4.96\% \\
 \bottomrule
 \end{tabular}
 \vspace{-4pt}
 \end{table}
 
-XL instances lack published optimal solutions, so we report total distance. The Cloud Priority (DeepSeek) evolved function reduces cost by 4.96\% over NN on instances up to 10,000 customers. This confirms that the learned routing principles (depot-proximity weighting, capacity-aware demand scoring) are not merely memorizing small-instance structure but encode transferable heuristics.
+XL instances lack published optimal solutions, so we report total distance. The DeepSeek Priority evolved function reduces cost by 4.96\% over NN on instances up to 10,000 customers. This confirms that the learned routing principles (depot-proximity weighting, capacity-aware demand scoring) are not merely memorizing small-instance structure but encode transferable heuristics.
 
 \section{Spec-Specific Failure Modes}
 \label{app:failure}
