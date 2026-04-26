@@ -56,7 +56,7 @@ We test two algorithmic skeletons. The \textbf{priority spec} uses greedy constr
 
 Evolution uses 10 islands with behavioral clustering (per-instance score signatures) to maintain diversity. The reduced score is the score on the \emph{last} (hardest) training instance. The fitness function maximizes $\text{score} = -(\text{distance} - \text{optimal}) / \text{optimal}$; invalid solutions receive $-10^9$. Response post-processing strips markdown, collects imports, validates with \texttt{ast.parse()}, and normalizes indentation to 2-space.
 
-Table~\ref{tab:settings} summarizes the three experiments. The Local Priority and Local Savings runs use Qwen2.5-Coder-7B on the full A-set with no split, providing a controlled spec comparison. The Cloud Priority run uses DeepSeek-v4-flash with train/val/test splits and a dynamic generalization penalty.
+Table~\ref{tab:settings} summarizes the four experiments. The Qwen Priority and Qwen Savings runs use Qwen2.5-Coder-7B on the full A-set with no split, providing a controlled spec comparison. The DeepSeek Priority and DeepSeek Savings runs use DeepSeek-v4-flash with train/val/test splits and a dynamic generalization penalty.
 
 \begin{table}[h]
 \centering
@@ -64,21 +64,19 @@ Table~\ref{tab:settings} summarizes the three experiments. The Local Priority an
 \caption{Experiment settings}
 \label{tab:settings}
 \vspace{-4pt}
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Setting & Local Priority & Local Savings & Cloud Priority \\
+Setting & Qwen Priority & Qwen Savings & DS Priority & DS Savings \\
 \midrule
-Model & Qwen 7B & Qwen 7B & DeepSeek-v4-flash \\
-Spec & priority() & savings() & priority() \\
-Dataset & A-set full & A-set full & A-set split \\
-Train/Test/Val & --- & --- & 65\% / 20\% / 15\% \\
-Islands & 10 & 10 & 10 \\
-Samples/prompt & 5 & 5 & 2 \\
-Score reduction & last & last & percentile\_25 \\
-Gen.
-
- penalty & none & none & dynamic CV \\
-Iterations & 1000 & 995 & 550 \\
+Model & Qwen 7B & Qwen 7B & DeepSeek-v4-flash & DeepSeek-v4-flash \\
+Spec & priority() & savings() & priority() & savings() \\
+Dataset & A-set full & A-set full & A-set split & A-set split \\
+Train/Test/Val & --- & --- & 65\% / 20\% / 15\% & 65\% / 20\% / 15\% \\
+Islands & 10 & 10 & 10 & 10 \\
+Samples/prompt & 5 & 5 & 2 & 2 \\
+Score reduction & last & last & percentile\_25 & percentile\_25 \\
+Gen. penalty & none & none & dynamic CV & dynamic CV \\
+Iterations & 1000 & 995 & 550 & 476 \\
 \bottomrule
 \end{tabular}
 \vspace{-8pt}
@@ -92,8 +90,6 @@ Iterations & 1000 & 995 & 550 \\
 \vspace{-2pt}
 
 Table~\ref{tab:overall} compares all methods on CVRPLib A-set (27 instances, 32--80 customers). The savings spec achieves 1.68\% gap---nearly $7\times$ better than the priority spec's 11.65\% gap with the \emph{same} 7B model. This confirms that the algorithmic skeleton dominates LLM capability: CW merging provides a higher-ceiling search space than greedy sequential construction.
-
-The DeepSeek cloud run appears worse (29.8\% train gap) but three methodological differences explain this: (1) percentile\_25 reduction is stricter than last-instance; (2) the generalization penalty trades train performance for consistency; and (3) the test split removes 20\% of instances from training. Despite worse absolute numbers, the cloud run generalizes better (train 29.8\% $\to$ test 21.5\%) than the unregularized local run (train 11.7\% $\to$ test 23.7\%).
 
 \begin{table}[h]
 \centering
@@ -117,12 +113,52 @@ CW + 2-opt & $-0.0470$ & 4.70\% \\
 \vspace{-8pt}
 \end{table}
 
-The savings spec produced only 7 milestones across 995 iterations---the starting CW heuristic is already strong, leaving limited headroom. The priority spec had 0 milestones because the initial NN heuristic is so weak that acceptance does not correlate with improvement. FunSearch is most effective when the initial heuristic is competent but suboptimal: too weak and search wanders; too strong and there is no headroom.
+The DeepSeek runs appear worse in absolute train gap (29.8\% for priority) but three methodological differences explain this: (1) percentile\_25 reduction is stricter than last-instance; (2) the generalization penalty trades train performance for consistency; and (3) the test split removes 20\% of instances from training. Despite worse absolute numbers, the DeepSeek priority run generalizes better (train 29.8\% $\to$ test 21.5\%) than the unregularized Qwen priority run (train 11.7\% $\to$ test 23.7\%).
+
+The savings spec produced only 7 milestones across 995 iterations for Qwen---the starting CW heuristic is already strong, leaving limited headroom. In contrast, the DeepSeek savings run produced 28 milestones in 476 iterations, suggesting the frontier model finds more creative mutations even within a strong skeleton. FunSearch is most effective when the initial heuristic is competent but suboptimal: too weak and search wanders; too strong and there is no headroom.
+
+\subsection{Evolution Trajectories}
+\vspace{-2pt}
+
+Figure~\ref{fig:evolution_all} shows the best-score trajectories for all four experiments. The Qwen savings run (teal) converges almost immediately to near-optimal scores, reflecting the strength of the CW skeleton. The Qwen priority run (orange) shows steady improvement over 400 iterations before plateauing. The DeepSeek runs (purple and red) find good solutions within 50--100 iterations but then stall, confirming that frontier models locate promising regions of program space quickly yet struggle to escape local optima.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/fig_evolution_all.png}
+\vspace{-6pt}
+\caption{Evolution trajectories across all four experiments. Milestones marked with dots.}
+\label{fig:evolution_all}
+\vspace{-6pt}
+\end{figure}
+
+Figure~\ref{fig:per_island} demonstrates that the island architecture successfully maintains diversity. Different islands converge to different score plateaus, and some islands (e.g., Island~3) discover improvements that others miss. This redundancy prevents premature convergence and ensures that the population explores multiple regions of the program space simultaneously.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/fig_per_island.png}
+\vspace{-6pt}
+\caption{Per-island trajectories for the Qwen priority run. Each island evolves independently with periodic resets of the weakest populations.}
+\label{fig:per_island}
+\vspace{-6pt}
+\end{figure}
 
 \subsection{X-Set and XL-Set Generalization}
 \vspace{-2pt}
 
-Table~\ref{tab:cross} reports cross-dataset generalization to larger instances. Priority-based evolved heuristics transfer well: both Qwen and DeepSeek achieve substantial improvements over NN on the X-set (100--1001 customers), despite never seeing instances with more than 80 customers during training. The Qwen-evolved priority function achieves the best X-set performance at 15.87\% gap.
+Figure~\ref{fig:cross_dataset} visualizes cross-dataset generalization. Priority-based evolved heuristics transfer well: both Qwen and DeepSeek achieve substantial improvements over NN on the X-set (100--1001 customers), despite never seeing instances with more than 80 customers during training. The Qwen-evolved priority function achieves the best X-set performance at 15.87\% gap.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/fig_cross_dataset.png}
+\vspace{-6pt}
+\caption{Cross-dataset generalization on A-set (train) and X-set (test). Baselines in gray; evolved methods in color.}
+\label{fig:cross_dataset}
+\vspace{-6pt}
+\end{figure}
+
+The savings spec overfits severely: it achieves 1.68\% on the A-set but degrades to 19.84\% (Qwen) and 22.09\% (DeepSeek) on the X-set---far worse than the hand-designed CW baseline (6.01\%). The more capable DeepSeek model overfits \emph{more} aggressively on the savings spec ($-$16.08~pp vs CW) than the 7B model ($-$13.83~pp), suggesting that stronger models exploit training-instance structure more effectively when the skeleton has high expressive power but low transferability.
+
+Table~\ref{tab:cross} reports the numerical results. On the XL-set (1000--10,000 customers, no known optimal), the DeepSeek priority function reduces total distance by 4.96\% over NN, confirming that the learned depot-proximity weighting and capacity-aware demand scoring encode transferable principles.
 
 \begin{table}[h]
 \centering
@@ -144,23 +180,49 @@ XL-set (DeepSeek Priority) & 579,810 (NN) & 551,067 & +4.96\% \\
 \vspace{-8pt}
 \end{table}
 
-The savings spec overfits severely: it achieves 1.68\% on the A-set but degrades to 19.84\% on the X-set---far worse than the hand-designed CW baseline (6.01\%). The Qwen 7B model learned merge rules that exploit A-set instance geometry but do not transfer to larger problems. On the XL-set (1000--10,000 customers, no known optimal), the DeepSeek priority function reduces total distance by 4.96\% over NN, confirming that the learned depot-proximity weighting and capacity-aware demand scoring encode transferable principles.
-
-\subsection{Evolution Dynamics and Limitations}
+\subsection{Train-Test Dynamics and Generalization Penalty}
 \vspace{-2pt}
 
-Figure~\ref{fig:evolution} shows rapid early improvement (iterations 0--400) followed by a long plateau. The Qwen priority run achieved 22 distinct milestones but stalled after iteration 650. The DeepSeek run found its best program at iteration 61---after only 62 evaluations---with no improvement thereafter. Frontier models find good solutions quickly but cannot escape local optima in program space.
+Figure~\ref{fig:train_test_gap} shows how the DeepSeek priority run's train and test gaps evolve. The test gap drops sharply in the first 50 iterations and stabilizes at 21.5\%, while the penalized train gap plateaus at 29.8\%. Without the dynamic penalty, the Qwen priority run's test gap balloons to 23.7\% despite a much lower train gap (11.7\%), demonstrating that the penalty successfully prevents overfitting.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.85\linewidth]{figure_evolution.png}
+\includegraphics[width=0.95\linewidth]{figures/fig_train_test_gap.png}
 \vspace{-6pt}
-\caption{Best overall score over 1000 iterations. Rapid early improvement followed by a long plateau.}
-\label{fig:evolution}
-\vspace{-8pt}
+\caption{Train vs.~test gap evolution for the DeepSeek priority run. Test evaluations occur every 10 iterations.}
+\label{fig:train_test_gap}
+\vspace{-6pt}
 \end{figure}
 
-The dynamic generalization penalty successfully prevents train-test gap explosion (29.8\% $\to$ 21.5\% versus 11.7\% $\to$ 23.7\% without penalty), but capping at 1.0 suppresses exploration. After iteration 480, only island-specific improvements occur; no new global best is found. A staged penalty (low during exploration, high during exploitation) would likely perform better.
+Figure~\ref{fig:val_penalty} reveals the validation dynamics for the DeepSeek savings run. The generalization gap (train minus validation) spikes whenever a new best program is accepted, triggering the penalty to increase. The penalty successfully compresses the gap after iteration~350, but at the cost of suppressing exploration---no further global improvements are found after the penalty caps at 1.0.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/fig_val_penalty.png}
+\vspace{-6pt}
+\caption{Validation gap and generalization gap for the DeepSeek savings run. Dual y-axes show gap percentage (left) and generalization gap in percentage points (right).}
+\label{fig:val_penalty}
+\vspace{-6pt}
+\end{figure}
+
+\subsection{Milestone Patterns}
+\vspace{-2pt}
+
+Figure~\ref{fig:milestones} shows the distribution of milestone timings. DeepSeek produces milestones throughout the run (65 for priority, 28 for savings), while Qwen milestones cluster early---the 7B model exhausts its creative capacity within the first 200 iterations. This suggests frontier models maintain a broader ``mutation vocabulary'' and continue proposing novel variations longer, even though they cannot escape the local optimum they first discover.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/fig_milestones.png}
+\vspace{-6pt}
+\caption{Milestone timing distribution across all experiments. DeepSeek maintains discovery longer than Qwen.}
+\label{fig:milestones}
+\vspace{-6pt}
+\end{figure}
+
+\subsection{Limitations and Future Directions}
+\vspace{-2pt}
+
+Three limitations emerge from our experiments. \textbf{First}, the dynamic penalty caps at 1.0, which is too aggressive: after iteration 480, the score is dominated by the penalty term and the LLM has no incentive to propose creative mutations. A staged penalty (low during exploration, high during exploitation) would likely perform better. \textbf{Second}, the savings spec's brittleness---small changes to the formula produce wildly different merge orders---makes it unsuitable for LLM-driven evolution unless paired with local search or repair mechanisms. \textbf{Third}, all experiments use single-model evolution; ensemble methods that combine priority and savings heuristics could exploit the complementary strengths of both skeletons.
 
 \vspace{-4pt}
 \section{Conclusion}
