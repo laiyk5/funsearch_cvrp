@@ -7,6 +7,22 @@
 \usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{listings}
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\bfseries\color{blue!70!black},
+  commentstyle=\itshape\color{green!50!black},
+  stringstyle=\color{orange},
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=2,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=2em,
+}
 
 \title{Sample-Efficient FunSearch for CVRP Heuristic Discovery}
 
@@ -19,61 +35,65 @@ Paper under double-blind review}
 \vspace{-10pt}
 
 \begin{abstract}
-We present a FunSearch implementation for automatically discovering CVRP construction heuristics. Using code-generation models from 7B to frontier-scale, we evolve priority and savings functions across greedy and Clarke-Wright solvers. A controlled comparison reveals that the algorithmic skeleton matters more than LLM capability: a savings spec achieves 1.68\% gap while a priority spec plateaus at 11.65\% gap with the same model. With train/test/val splits and a dynamic generalization penalty, a frontier model finds its best solution in 61 iterations but the penalty caps at 1.0 and suppresses further exploration. Our results show that (1) strong baselines provide higher-ceiling improvement, (2) generalization penalties can prevent overfitting but may be too aggressive, and (3) LLM-driven search discovers useful heuristics quickly but struggles to escape local optima in program space.
+We present FunSearch for CVRP heuristic discovery, evolving priority and savings functions with LLMs from 7B to frontier scale. A controlled comparison shows the algorithmic skeleton dominates LLM capability: a savings spec achieves 1.68\% gap while a priority spec plateaus at 11.65\% with the same 7B model. Train/test/val splits with a dynamic generalization penalty reveal that frontier models find good solutions in 61 iterations but cannot escape local optima, and penalties prevent overfitting yet cap exploration when too aggressive.
 \end{abstract}
 
 \vspace{-6pt}
-\section{Motivation and Problem}
+\section{Introduction}
 \vspace{-4pt}
 
-The Capacitated Vehicle Routing Problem (CVRP) asks for minimum-cost vehicle routes from a central depot, visiting every customer exactly once without exceeding vehicle capacity. As an NP-hard problem, exact methods scale poorly and practitioners rely on heuristics such as Nearest Neighbor, Clarke-Wright Savings \citep{clarke1964}, and Sweep \citep{gillet1974}---all hand-designed by domain experts.
+The Capacitated Vehicle Routing Problem (CVRP) asks for minimum-cost vehicle routes from a central depot, visiting every customer exactly once without exceeding vehicle capacity. Standard baselines include Nearest Neighbor (NN), Clarke-Wright Savings (CW) \citep{clarke1964}, and CW with 2-opt local search.
 
-\textbf{Why automate heuristic discovery?} Designing effective heuristics requires deep domain expertise and trial-and-error. FunSearch \citep{romero2023funsearch} offers a compelling alternative: treat program synthesis as evolutionary search, using an LLM as a mutation operator. This is particularly appropriate for CVRP because (1) construction heuristics naturally decompose into scalar priority functions, providing a compact search space; (2) greedy evaluation is fast ($O(n^2)$ per instance), enabling thousands of iterations; and (3) LLMs can synthesize novel feature combinations that human designers might overlook.
+FunSearch \citep{romero2023funsearch} treats program synthesis as evolutionary search with an LLM as the mutation operator. CVRP is well-suited because construction heuristics decompose into scalar functions, greedy evaluation is fast ($O(n^2)$), and LLMs can synthesize novel feature combinations. Prior work reports training performance only; we argue this is insufficient because LLM-generated code can overfit to instance structure. We ask: \emph{Can an LLM discover CVRP heuristics that generalize?}
 
-\textbf{Why is this hard?} Prior work on LLM-driven algorithm discovery \citep{romero2023funsearch} reports training performance only. We argue this is insufficient: LLM-generated code can easily overfit to training instance structure, and without held-out evaluation, one cannot distinguish learning routing \emph{principles} from memorizing \emph{structure}. Our core question is: \emph{Can an LLM discover CVRP heuristics that generalize?}
+\textbf{Differences from original FunSearch.} We add three mechanisms absent in the original: (1) \emph{train/test/val splits} to measure generalization rather than memorization; (2) a \emph{dynamic generalization penalty} (coefficient of variation across instances) that increases when validation performance degrades; and (3) \emph{cross-dataset benchmarking} on X-set (100--1001 customers) and XL-set (1000--10,000 customers) to test transfer beyond the training distribution.
 
 \vspace{-4pt}
 \section{Method}
 \vspace{-4pt}
 
-\subsection{Why a Greedy Priority Function?}
-\vspace{-2pt}
+We test two algorithmic skeletons. The \textbf{priority spec} uses greedy constructive search: a \texttt{priority(current\_node, candidate, instance, remaining\_capacity, route, route\_demand, unserved)} function scores each feasible next customer, and the highest is appended to the current route. The \textbf{savings spec} uses Clarke-Wright route merging: a \texttt{savings(i, j, instance)} function scores the benefit of merging the route ending at $i$ with the route starting at $j$. The baseline is $s_{ij} = c_{i0} + c_{0j} - c_{ij}$. Both specs provide a controlled comparison: same model, same instances, same evolution---only the skeleton differs.
 
-A CVRP instance is $I = (V, c, d, Q)$ where $V = \{0, 1, \dots, n\}$ includes the depot (0), $c_{ij}$ is Euclidean distance, $d_i$ is demand, and $Q$ is capacity. We define a greedy solver that repeatedly calls a \texttt{priority()} function to choose the next customer:
-\begin{verbatim}
-def priority(current_node, candidate, instance,
-             remaining_capacity, route, route_demand,
-             unserved) -> float
-\end{verbatim}
-Higher values indicate stronger preference. This design is deliberate: the search space is rich enough to encode sophisticated strategies (distance, capacity, depot proximity, demand density) yet compact enough that a 7B model can propose meaningful mutations in a few tokens.
+Evolution uses 10 islands with behavioral clustering (per-instance score signatures) to maintain diversity. The reduced score is the score on the \emph{last} (hardest) training instance. The fitness function maximizes $\text{score} = -(\text{distance} - \text{optimal}) / \text{optimal}$; invalid solutions receive $-10^9$. Response post-processing strips markdown, collects imports, validates with \texttt{ast.parse()}, and normalizes indentation to 2-space.
 
-The fitness function maximizes $\text{score} = -(\text{distance} - \text{optimal}) / \text{optimal}$, so $-0.10$ corresponds to a 10\% gap above optimal. Invalid solutions receive $-10^9$.
+Table~\ref{tab:settings} summarizes the three experiments. The Local Priority and Local Savings runs use Qwen2.5-Coder-7B on the full A-set with no split, providing a controlled spec comparison. The Cloud Priority run uses DeepSeek-v4-flash with train/val/test splits and a dynamic generalization penalty.
 
-\subsection{Why Island-Based Evolution?}
-\vspace{-2pt}
+\begin{table}[h]
+\centering
+\small
+\caption{Experiment settings}
+\label{tab:settings}
+\vspace{-4pt}
+\begin{tabular}{lccc}
+\toprule
+Setting & Local Priority & Local Savings & Cloud Priority \\
+\midrule
+Model & Qwen 7B & Qwen 7B & DeepSeek-v4-flash \\
+Spec & priority() & savings() & priority() \\
+Dataset & A-set full & A-set full & A-set split \\
+Train/Test/Val & --- & --- & 65\% / 20\% / 15\% \\
+Islands & 10 & 10 & 10 \\
+Samples/prompt & 5 & 5 & 2 \\
+Score reduction & last & last & percentile\_25 \\
+Gen.
 
-We use 10 islands, each maintaining a population clustered by behavioral signature (per-instance score vectors). This is appropriate because different CVRP instances reward different routing strategies: dense urban instances favor short-distance routing, while sparse rural instances favor depot-proximity. Island diversity prevents premature convergence to a single strategy that works well on only a subset of cases. Following the DeepMind reference, the reduced score for a program is the score on the \emph{last} training instance (the hardest), not the mean or maximum. This biases search toward robust performance on difficult cases.
-
-\subsection{Train/Test Split for Generalization}
-\vspace{-2pt}
-
-We hold out 5 of 27 CVRPLib A-set instances as a test set. Measuring generalization is critical because LLM-generated heuristics might exploit idiosyncrasies of training instances. Without held-out evaluation, reported improvements may be illusory. We evaluate the best program on the test set every 100 iterations.
-
-\subsection{LLM Interface and Stability}
-\vspace{-2pt}
-
-We use Qwen2.5-Coder-7B via an OpenAI-compatible local API. Response post-processing strips markdown fences, collects \texttt{import} lines, trims trailing prose until \texttt{ast.parse()} succeeds, and normalizes indentation to 2-space. Rate-limiting and retry logic ensure stable long-running execution.
-
-\textbf{Experimental setup.} Dataset: CVRPLib A-set (27 instances, 32--80 customers). Baselines: Nearest Neighbor (NN), Clarke-Wright Savings (CW), and CW+2-opt. Local experiments use Qwen2.5-Coder-7B via an OpenAI-compatible local API with 10 islands and 5 samples/prompt. Cloud experiments use DeepSeek-v4-flash via API with 10 islands, 2 samples/prompt, train/test/val splits (20\% test, 15\% val), and a dynamic generalization penalty. Response post-processing strips markdown fences, collects \texttt{import} lines, trims trailing prose until \texttt{ast.parse()} succeeds, and normalizes indentation to 2-space. Rate-limiting and retry logic ensure stable long-running execution.
+ penalty & none & none & dynamic CV \\
+Iterations & 1000 & 995 & 550 \\
+\bottomrule
+\end{tabular}
+\vspace{-8pt}
+\end{table}
 
 \vspace{-4pt}
-\section{Results and Insights}
+\section{Results}
 \vspace{-4pt}
 
-\subsection{Overall Performance}
+\subsection{A-Set: Spec and Model Comparison}
 \vspace{-2pt}
 
-Table~\ref{tab:overall} compares FunSearch against baselines. FunSearch significantly outperforms Nearest Neighbor but does not reach Clarke-Wright Savings. This gap is \emph{structural}: CW is a sophisticated route-merging algorithm, whereas FunSearch is restricted to a single priority function for greedy construction. The expressive power of our search space is fundamentally lower.
+Table~\ref{tab:overall} compares all methods on CVRPLib A-set (27 instances, 32--80 customers). The savings spec achieves 1.68\% gap---nearly $7\times$ better than the priority spec's 11.65\% gap with the \emph{same} 7B model. This confirms that the algorithmic skeleton dominates LLM capability: CW merging provides a higher-ceiling search space than greedy sequential construction.
+
+The DeepSeek cloud run appears worse (29.8\% train gap) but three methodological differences explain this: (1) percentile\_25 reduction is stricter than last-instance; (2) the generalization penalty trades train performance for consistency; and (3) the test split removes 20\% of instances from training. Despite worse absolute numbers, the cloud run generalizes better (train 29.8\% $\to$ test 21.5\%) than the unregularized local run (train 11.7\% $\to$ test 23.7\%).
 
 \begin{table}[h]
 \centering
@@ -97,10 +117,38 @@ CW + 2-opt & $-0.0470$ & 4.70\% \\
 \vspace{-8pt}
 \end{table}
 
-\subsection{Evolution Trajectory and Island Dynamics}
+The savings spec produced only 7 milestones across 995 iterations---the starting CW heuristic is already strong, leaving limited headroom. The priority spec had 0 milestones because the initial NN heuristic is so weak that acceptance does not correlate with improvement. FunSearch is most effective when the initial heuristic is competent but suboptimal: too weak and search wanders; too strong and there is no headroom.
+
+\subsection{X-Set and XL-Set Generalization}
 \vspace{-2pt}
 
-Figure~\ref{fig:evolution} shows the best overall score over 1000 iterations. The run achieved 22 distinct improvement milestones. Progress was rapid in early iterations (0--400), then plateaued after iteration 650. This reveals two insights: (1) even a 7B model has sufficient inductive bias for heuristic mutation---useful feature combinations are discovered quickly; (2) the long plateau indicates the search entered a local optimum in program space.
+Table~\ref{tab:cross} reports cross-dataset generalization to larger instances. Priority-based evolved heuristics transfer well: both Qwen and DeepSeek achieve substantial improvements over NN on the X-set (100--1001 customers), despite never seeing instances with more than 80 customers during training. The Qwen-evolved priority function achieves the best X-set performance at 15.87\% gap.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Cross-dataset generalization}
+\label{tab:cross}
+\vspace{-4pt}
+\begin{tabular}{lccc}
+\toprule
+Experiment & Baseline & Evolved & Improvement \\
+\midrule
+X-set (Qwen 7B Priority) & 25.47\% (NN) & 15.87\% & +9.60 pp \\
+X-set (DeepSeek Priority) & 25.47\% (NN) & 17.81\% & +7.66 pp \\
+X-set (Qwen 7B Savings) & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \\
+XL-set (DeepSeek Priority) & 579,810 (NN) & 551,067 & +4.96\% \\
+\bottomrule
+\end{tabular}
+\vspace{-8pt}
+\end{table}
+
+The savings spec overfits severely: it achieves 1.68\% on the A-set but degrades to 19.84\% on the X-set---far worse than the hand-designed CW baseline (6.01\%). The Qwen 7B model learned merge rules that exploit A-set instance geometry but do not transfer to larger problems. On the XL-set (1000--10,000 customers, no known optimal), the DeepSeek priority function reduces total distance by 4.96\% over NN, confirming that the learned depot-proximity weighting and capacity-aware demand scoring encode transferable principles.
+
+\subsection{Evolution Dynamics and Limitations}
+\vspace{-2pt}
+
+Figure~\ref{fig:evolution} shows rapid early improvement (iterations 0--400) followed by a long plateau. The Qwen priority run achieved 22 distinct milestones but stalled after iteration 650. The DeepSeek run found its best program at iteration 61---after only 62 evaluations---with no improvement thereafter. Frontier models find good solutions quickly but cannot escape local optima in program space.
 
 \begin{figure}[h]
 \centering
@@ -111,88 +159,193 @@ Figure~\ref{fig:evolution} shows the best overall score over 1000 iterations. Th
 \vspace{-8pt}
 \end{figure}
 
-Figure~\ref{fig:islands} shows per-island trajectories. All islands improve, but at different rates and to different plateaus. This confirms that the island architecture successfully maintains diversity: different islands explore different regions of the priority-function space.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.95\linewidth]{figure_islands.png}
-\vspace{-6pt}
-\caption{Best score per island over 1000 iterations. Different islands converge to different plateaus, confirming diversity maintenance.}
-\label{fig:islands}
-\vspace{-8pt}
-\end{figure}
-
-\subsection{What the Evolved Function Reveals}
-\vspace{-2pt}
-
-The best evolved \texttt{priority()} function incorporates: Euclidean distance to candidate, distance to depot weighted by remaining capacity, demand penalty, route-length penalty, proximity to unserved customers, and customer density near the current node. Crucially, the LLM synthesized these features \emph{without explicit prompting}, demonstrating emergent feature engineering. The function blends distance-minimization with capacity-balancing---a non-obvious combination.
-
-\subsection{The Overfitting Insight}
-\vspace{-2pt}
-
-Table~\ref{tab:generalization} compares generalization across the local run (no regularization) and the cloud run (with dynamic penalty). The local run shows severe overfitting: training gap doubles on test. The cloud run with generalization penalty achieves a smaller train-to-test gap (29.8\% $\to$ 21.5\%), but at the cost of much worse absolute performance---the penalty suppresses exploration and the search cannot find solutions competitive with the unregularized local run.
-
-\begin{table}[h]
-\centering
-\small
-\caption{Train vs.\ test performance: unregularized vs.\ penalized}
-\label{tab:generalization}
-\vspace{-4pt}
-\begin{tabular}{lccc}
-\toprule
-Run & Train Gap & Test Gap & Train$\to$Test \\
-\midrule
-Priority (Qwen 7B, no split) & 11.65\% & 23.69\% & +12.0\% \\
-Priority (DeepSeek, penalty) & 29.79\% & 21.47\% & $-$8.3\% \\
-\bottomrule
-\end{tabular}
-\vspace{-8pt}
-\end{table}
-
-This has methodological implications. Prior work on LLM-driven algorithm discovery often reports training performance only; our train/test split demonstrates that this can be misleading. However, na\"{i}ve regularization (a uniform CV penalty) may be too blunt: it prevents overfitting but also prevents discovery of good training solutions. A more sophisticated approach would use cross-validation during scoring or only apply the penalty after an initial exploration phase.
-
-\subsection{Spec Comparison: Priority vs.\ Savings}
-\vspace{-2pt}
-
-A controlled comparison between the two algorithmic specifications (same Qwen2.5-Coder-7B model, same instances, no train/test split) reveals that the \emph{search space} matters more than the LLM's mutation quality. Table~\ref{tab:speccompare} shows that the savings spec achieves a 1.68\% gap---nearly 7$\times$ better than the priority spec's 11.65\% gap. This confirms a key design principle in learned heuristic search: a strong algorithmic skeleton (Clarke-Wright merging) provides higher-ceiling improvement than a weak skeleton (greedy sequential construction), even when both are evolved by the same LLM.
-
-\begin{table}[h]
-\centering
-\small
-\caption{Priority vs.\ Savings specification (Qwen2.5-Coder-7B, no split)}
-\label{tab:speccompare}
-\vspace{-4pt}
-\begin{tabular}{lccc}
-\toprule
-Spec & Iterations & Milestones & Best Gap \\
-\midrule
-Priority (greedy) & 1000 & 0 & 11.65\% \\
-Savings (CW-style) & 995 & 7 & 1.68\% \\
-\bottomrule
-\end{tabular}
-\vspace{-8pt}
-\end{table}
-
-The savings spec produced only 7 milestones across 995 iterations---the starting Clarke-Wright heuristic is already strong, leaving limited headroom for LLM-driven improvement. In contrast, the priority spec had 0 milestones in this run because the initial nearest-neighbor heuristic is so weak that almost any mutation is accepted, but acceptance does not correlate with improvement. This suggests that FunSearch is most effective when the initial heuristic is competent but suboptimal: too weak and search wanders aimlessly; too strong and there is little room to improve.
-
-\subsection{Cloud API Run: DeepSeek-v4-flash with Generalization Penalty}
-\vspace{-2pt}
-
-Switching to the more capable DeepSeek-v4-flash model and adding train/test/val splits (15\% validation, 20\% test) with a dynamic generalization penalty yields qualitatively different behavior. After 550 iterations, the best training score is $-0.2979$ (29.8\% gap), which appears worse than the local-model runs. However, this is explained by three methodological differences: (1) the score reduction method changed from ``last'' to ``percentile\_25'', making the metric stricter; (2) a generalization penalty (coefficient of variation across instances) is subtracted from the score, directly trading train performance for consistency; and (3) the test split removes instances from training, reducing the training set size.
-
-\textbf{Validation feedback dynamics.} The dynamic penalty starts at 0.05 and increases whenever the validation gap exceeds 5\%. It capped at 1.0 by iteration 480 and has remained there since. The validation gap stabilized at 0.070 (train clean $-0.2743$ vs.\ val $-0.3444$), but the test score is $-0.2147$ (21.5\% gap). This reveals two insights: first, the penalty successfully prevents the train-test gap from exploding (old run: 11.7\% $\to$ 23.7\%; new run: 29.8\% $\to$ 21.5\%); second, the penalty may be \emph{too aggressive}---capping at 1.0 suppresses exploration, and the run has found only 1 truly new best since iteration 61 (out of 62 milestones, only 1 reached $-0.2979$; the rest are island-specific improvements at much worse scores).
-
-\textbf{Sample efficiency.} The best program ($-0.2979$) was discovered at iteration 61---after only 62 evaluations. The subsequent 490 evaluations produced no improvement. This is both encouraging (the capable model finds good solutions quickly) and concerning (the search enters a deep local optimum and cannot escape). The evolved program is 56 lines---more compact than the Qwen-evolved programs (87--83 lines)---suggesting DeepSeek generates cleaner, more focused mutations.
-
-\textbf{Limitations and future work.} The gap to Clarke-Wright Savings remains large (11.7\% vs.\ 5.1\%). We attribute this to two factors: (1) the constructive solver is strictly less expressive than route-merging algorithms, and (2) the 7B model may lack capacity for more sophisticated algorithmic structures. Directions include evolving improvement operators (e.g., 2-opt, relocate), stronger regularization such as cross-validation during scoring, and evolving multi-stage algorithms rather than single priority functions.
+The dynamic generalization penalty successfully prevents train-test gap explosion (29.8\% $\to$ 21.5\% versus 11.7\% $\to$ 23.7\% without penalty), but capping at 1.0 suppresses exploration. After iteration 480, only island-specific improvements occur; no new global best is found. A staged penalty (low during exploration, high during exploitation) would likely perform better.
 
 \vspace{-4pt}
 \section{Conclusion}
 \vspace{-4pt}
 
-We present a complete FunSearch pipeline for CVRP with engineering contributions in observability, resumability, and generalization measurement. Our experiments yield four conclusions. \textbf{First}, the algorithmic skeleton dominates LLM capability: a savings spec achieves 1.68\% gap while a priority spec plateaus at 11.65\% with the same model. \textbf{Second}, frontier models find good solutions almost immediately (best at iteration 61) but cannot escape local optima thereafter. \textbf{Third}, dynamic generalization penalties prevent train-test gap explosion but cap at 1.0 and suppress exploration. \textbf{Fourth}, LLM-driven heuristic search is most effective when the initial heuristic is competent but suboptimal---too weak and search wanders; too strong and there is no headroom. Code and experiments are available at \url{https://github.com/laiyk5/funsearch_cvrp}.
+We present a complete FunSearch pipeline for CVRP with train/test splits, dynamic generalization penalties, and cross-dataset benchmarking. Our experiments yield four conclusions. \textbf{First}, the algorithmic skeleton dominates LLM capability: a savings spec achieves 1.68\% gap while a priority spec plateaus at 11.65\% with the same model. \textbf{Second}, frontier models find good solutions almost immediately (best at iteration 61) but cannot escape local optima. \textbf{Third}, dynamic penalties prevent overfitting but cap at 1.0 and suppress exploration. \textbf{Fourth}, priority heuristics generalize to instances 100$\times$ larger than training, while savings heuristics overfit to small-instance structure. Code and experiments are available at \url{https://github.com/laiyk5/funsearch_cvrp}; an interactive Colab notebook reproducing all results is at \url{https://colab.research.google.com/github/laiyk5/funsearch_cvrp/blob/main/notebooks/funsearch_cvrp.ipynb}.
 
 \bibliography{iclr2024_conference}
 \bibliographystyle{iclr2024_conference}
+
+% ========================================================================
+% APPENDICES
+% ========================================================================
+\newpage
+\appendix
+
+\section{Cross-Dataset Generalization Benchmarks}
+\label{app:generalization}
+
+All experiments in the main paper were evaluated on the CVRPLib A-set (27 instances, 32--80 customers). To assess generalization to larger and structurally different instances, we benchmarked three evolved programs on the X-set (100 instances, 100--1001 customers) and XL-set (100 instances, 1000--10,000 customers). Table~\ref{tab:xset} and Table~\ref{tab:xlset} report the results.
+
+\subsection{X-Set Generalization (100--1001 customers)}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Generalization to CVRPLib X-set (100 instances with known optimal)}
+\label{tab:xset}
+\vspace{-4pt}
+\begin{tabular}{lccc}
+\toprule
+Experiment (Model / Spec) & Baseline Gap & Evolved Gap & Improvement \\
+\midrule
+Local Priority (Qwen 7B) & 25.47\% & 15.87\% & +9.60 pp \\
+Cloud Priority (DeepSeek) & 25.47\% & 17.81\% & +7.66 pp \\
+Local Savings (Qwen 7B) & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \\
+\bottomrule
+\end{tabular}
+\vspace{-4pt}
+\end{table}
+
+\textbf{Key finding:} Priority-based evolved heuristics generalize well to larger instances. Both priority experiments achieve substantial improvements over the Nearest Neighbor baseline on the X-set, despite never having seen instances with more than 80 customers during training. The Local Priority run (Qwen 7B, no generalization penalty) achieves the best X-set performance at 15.87\% gap.
+
+\textbf{Overfitting in savings specs:} The Qwen-evolved savings function achieves only 1.68\% gap on the A-set but degrades to 19.84\% on the X-set---far worse than the hand-designed Clarke-Wright baseline (6.01\%). This confirms that the savings spec overfits to the small-instance structure of the training set. The savings merge rules learned by the 7B model exploit idiosyncrasies of A-set instance geometry that do not transfer to larger problems.
+
+\subsection{XL-Set Generalization (1000--10,000 customers)}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Generalization to CVRPLib XL-set (100 instances, no known optimal)}
+\label{tab:xlset}
+\vspace{-4pt}
+\begin{tabular}{lccc}
+\toprule
+Experiment (Model / Spec) & Baseline Cost & Evolved Cost & Improvement \\
+\midrule
+Cloud Priority (DeepSeek) & 579,810 & 551,067 & +4.96\% \\
+\bottomrule
+\end{tabular}
+\vspace{-4pt}
+\end{table}
+
+XL instances lack published optimal solutions, so we report total distance. The Cloud Priority (DeepSeek) evolved function reduces cost by 4.96\% over NN on instances up to 10,000 customers. This confirms that the learned routing principles (depot-proximity weighting, capacity-aware demand scoring) are not merely memorizing small-instance structure but encode transferable heuristics.
+
+\section{Spec-Specific Failure Modes}
+\label{app:failure}
+
+\textbf{Priority spec:} The greedy solver is structurally limited---it builds routes sequentially without any merge or local search phase. Even the best evolved priority function cannot escape this ceiling. On the A-set, the priority spec plateaus at 11.65\% gap while CW achieves 5.11\%. On the X-set, the gap widens: CW at 6.01\% versus evolved priority at 15.87\%. This is expected because CW is a fundamentally stronger algorithmic skeleton.
+
+\textbf{Savings spec:} The savings spec has higher expressive power but is harder for the LLM to mutate correctly. The Qwen 7B model produced 7 milestones across 995 iterations on the A-set, achieving 1.68\% gap---nearly 7$\times$ better than the priority spec. However, the evolved savings function is brittle: small changes to the savings formula can produce wildly different merge orders, and the model frequently introduces numerical instabilities (e.g., division by zero) when trying to combine distance and demand features. The result is a function that works well on training instances but breaks down on larger problems where merge order errors compound.
+
+\section{Dynamic Generalization Penalty Analysis}
+\label{app:penalty}
+
+The cloud run (DeepSeek-v4-flash with train/val/test splits) uses a dynamic penalty $p_t$ that starts at 0.05 and increases whenever the validation gap exceeds 5\%. The penalty trajectory is:
+
+\begin{itemize}
+\item Iterations 0--200: $p_t = 0.05$ to $0.30$. Training score improves from $-0.47$ to $-0.32$.
+\item Iterations 200--480: $p_t$ rises to 1.0 and caps. Training score stalls at $-0.30$.
+\item Iterations 480--550: $p_t = 1.0$ (max). Only island-specific improvements occur; no new global best.
+\end{itemize}
+
+The penalty successfully prevents train-test gap explosion (29.8\% $\to$ 21.5\% versus 11.7\% $\to$ 23.7\% without penalty). However, capping at $p_t = 1.0$ is too aggressive: the score is dominated by the penalty term, and the LLM has no incentive to propose creative mutations because any variation that improves training performance but increases cross-instance variance is immediately rejected. A staged penalty (low during exploration, high during exploitation) would likely perform better.
+
+\section{Evolved Program Code}
+\label{app:code}
+
+\subsection{Best Priority Function (DeepSeek-v4-flash)}
+
+The best evolved priority function (discovered at iteration 61, score $-0.2979$) incorporates a capacity-dependent demand weight and a depot-distance savings term with $\lambda = 1.5$. The key insight is that the LLM discovered---without explicit prompting---that demand weighting should be higher when the vehicle is nearly empty (first customer of a route gets weight 5.0) and lower when the vehicle is partially filled (weight scales with remaining capacity ratio).
+
+\begin{lstlisting}
+def priority(current_node: int, candidate: int, instance,
+             remaining_capacity: int, route: list,
+             route_demand: int, unserved: set) -> float:
+  import math
+  demand = instance.demands[candidate]
+  if demand > remaining_capacity:
+      return -float('inf')
+
+  depot = instance.coords[0]
+  cur_coords = instance.coords[current_node]
+  cand_coords = instance.coords[candidate]
+
+  d_cur = math.hypot(cur_coords[0] - cand_coords[0],
+                     cur_coords[1] - cand_coords[1])
+  d_dep = math.hypot(cand_coords[0] - depot[0],
+                     cand_coords[1] - depot[1])
+
+  LAMBDA = 1.5
+
+  if current_node == 0:          # starting a new route
+      distance_term = d_dep
+      demand_weight = 5.0
+  else:
+      distance_term = d_dep - LAMBDA * d_cur
+      demand_weight = 10.0 * (1.0 + remaining_capacity / instance.capacity)
+
+  demand_term = demand / remaining_capacity if remaining_capacity > 0 else 0.0
+  return distance_term + demand_weight * demand_term
+\end{lstlisting}
+
+\subsection{Best Savings Function (Qwen2.5-Coder-7B)}
+
+The best evolved savings function (1.68\% gap on A-set) modifies the classical Clarke-Wright savings formula $s_{ij} = c_{i0} + c_{0j} - c_{ij}$ by adding demand-aware and angle-aware terms.
+
+\begin{lstlisting}
+def savings(i: int, j: int, instance) -> float:
+  import math
+  (x_i, y_i), (x_j, y_j), (x_d, y_d) = (
+      instance.coords[i], instance.coords[j], instance.coords[0])
+
+  d_i_depot = math.hypot(x_i - x_d, y_i - y_d)
+  d_depot_j = math.hypot(x_j - x_d, y_j - y_d)
+  d_i_j = math.hypot(x_i - x_j, y_i - y_j)
+
+  if d_i_depot < 1e-9 or d_i_j < 1e-9:
+      return float('inf')
+
+  base_savings = d_i_depot + d_depot_j - d_i_j
+
+  demand_balance_factor = (
+      abs(instance.demands[i] + instance.demands[j]) / instance.capacity)
+
+  avg_distance = (d_i_depot + d_depot_j) / 2.0
+  spatial_proximity_factor = min(1.0, max(d_i_depot, d_depot_j) / avg_distance)
+
+  angle_i_depot_j = (math.atan2(y_j - y_d, x_j - x_d)
+                     - math.atan2(y_i - y_d, x_i - x_d))
+  if angle_i_depot_j < 0:
+      angle_i_depot_j += 2 * math.pi
+
+  collinearity_factor = min(1.0, abs(math.sin(angle_i_depot_j)) / (math.pi / 4))
+
+  direction_i_depot = math.atan2(y_i - y_d, x_i - x_d)
+  direction_depot_j = math.atan2(y_j - y_d, x_j - x_d)
+  direction_diff = abs(direction_i_depot - direction_depot_j)
+  if direction_diff > math.pi:
+      direction_diff = 2 * math.pi - direction_diff
+  alignment_factor = min(1.0, abs(math.cos(direction_diff)))
+
+  route_length_penalty = max(d_i_depot, d_depot_j) / instance.capacity
+  if route_length_penalty > 2.0:
+      route_length_penalty = 1.0 + (route_length_penalty - 2.0) * 0.5
+
+  curvature_penalty = abs(math.tan(angle_i_depot_j)) / instance.capacity
+  if curvature_penalty > 2.0:
+      curvature_penalty = 1.0 + (curvature_penalty - 2.0) * 0.5
+
+  segment_count_penalty = max(1.0, d_i_depot + d_depot_j) / instance.capacity
+  if segment_count_penalty > 4.0:
+      segment_count_penalty = 1.0 + (segment_count_penalty - 4.0) * 0.5
+
+  long_segment_penalty = max(
+      0, max(d_i_depot, d_depot_j) - instance.capacity / 2) / instance.capacity
+
+  return (base_savings
+          + demand_balance_factor * 3
+          + spatial_proximity_factor * 4
+          + collinearity_factor * 5
+          + alignment_factor * 3
+          - route_length_penalty * 1.5
+          - curvature_penalty * 2
+          - segment_count_penalty * 1
+          - long_segment_penalty * 2)
+\end{lstlisting}
 
 \end{document}
