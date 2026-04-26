@@ -1,5 +1,7 @@
 # FunSearch for CVRP
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/laiyk5/funsearch_cvrp/blob/main/notebooks/funsearch_cvrp.ipynb)
+
 Sample-Efficient FunSearch for the Capacitated Vehicle Routing Problem — LLM-driven evolutionary search for heuristic algorithms.
 
 ## Workflow
