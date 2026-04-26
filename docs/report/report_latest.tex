@@ -137,6 +137,7 @@ Experiment & Baseline & Evolved & Improvement \\
 X-set (Qwen 7B Priority) & 25.47\% (NN) & 15.87\% & +9.60 pp \\
 X-set (DeepSeek Priority) & 25.47\% (NN) & 17.81\% & +7.66 pp \\
 X-set (Qwen 7B Savings) & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \\
+X-set (DeepSeek Savings) & 6.01\% (CW) & 22.09\% & \textcolor{red}{$-$16.08 pp} \\
 XL-set (DeepSeek Priority) & 579,810 (NN) & 551,067 & +4.96\% \\
 \bottomrule
 \end{tabular}
@@ -196,6 +197,7 @@ Experiment (Model / Spec) & Baseline Gap & Evolved Gap & Improvement \\
 Local Priority (Qwen 7B) & 25.47\% & 15.87\% & +9.60 pp \\
 Cloud Priority (DeepSeek) & 25.47\% & 17.81\% & +7.66 pp \\
 Local Savings (Qwen 7B) & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \\
+Cloud Savings (DeepSeek) & 6.01\% (CW) & 22.09\% & \textcolor{red}{$-$16.08 pp} \\
 \bottomrule
 \end{tabular}
 \vspace{-4pt}
@@ -203,7 +205,7 @@ Local Savings (Qwen 7B) & 6.01\% (CW) & 19.84\% & \textcolor{red}{$-$13.83 pp} \
 
 \textbf{Key finding:} Priority-based evolved heuristics generalize well to larger instances. Both priority experiments achieve substantial improvements over the Nearest Neighbor baseline on the X-set, despite never having seen instances with more than 80 customers during training. The Local Priority run (Qwen 7B, no generalization penalty) achieves the best X-set performance at 15.87\% gap.
 
-\textbf{Overfitting in savings specs:} The Qwen-evolved savings function achieves only 1.68\% gap on the A-set but degrades to 19.84\% on the X-set---far worse than the hand-designed Clarke-Wright baseline (6.01\%). This confirms that the savings spec overfits to the small-instance structure of the training set. The savings merge rules learned by the 7B model exploit idiosyncrasies of A-set instance geometry that do not transfer to larger problems.
+\textbf{Overfitting in savings specs:} Both Qwen and DeepSeek savings functions severely overfit. The Qwen-evolved savings achieves 1.68\% gap on the A-set but degrades to 19.84\% on the X-set---far worse than the hand-designed Clarke-Wright baseline (6.01\%). The DeepSeek savings function is even more brittle: 22.09\% gap on the X-set, a $-$16.08~pp regression versus CW. This confirms that the savings spec overfits to the small-instance structure of the training set. The learned merge rules exploit idiosyncrasies of A-set instance geometry that do not transfer to larger problems, and the more capable DeepSeek model overfits more aggressively.
 
 \subsection{XL-Set Generalization (1000--10,000 customers)}
 
