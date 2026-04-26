@@ -14,6 +14,10 @@ class ProgramsDatabaseConfig:
     """Round each per-test score to this many decimal places before forming the
     signature.  e.g. 2 buckets 0.4612 and 0.4598 into the same cluster (0.46).
     None disables bucketing (exact match required)."""
+    score_reduction_method: str = "percentile_25"
+    """Method to reduce per-test scores: 'last', 'percentile_25', 'mean', 'min'."""
+    generalization_penalty: float = 0.0
+    """Weight for coefficient-of-variation penalty (0 = disabled)."""
 
 
 @dataclasses.dataclass
@@ -23,7 +27,7 @@ class LLMConfig:
     base_url: str | None = None  # Custom API base URL (e.g., for proxy)
     api_key: str | None = None
     temperature: float = 0.7
-    max_tokens: int = 1000
+    max_tokens: int = 8000
     timeout: int = 30
 
 

@@ -14,6 +14,7 @@ dependencies = [
     "vrplib>=2.2.0",
     "ipykernel>=6.0.0",
     "ipywidgets>=8.0.0",
+    "pandas>=3.0.2",
 ]
 authors = [
     {name = "LAI Yikai", email = "laiyk5@163.com"},

@@ -99,22 +99,22 @@ class OpenAILLM(LLM):
     self._base_url = base_url
     self._prompt = prompt
 
-  def _draw_sample(self, prompt: str) -> str:
-    """Returns a predicted continuation of `prompt`."""
+    # Create a reusable OpenAI client to avoid connection pool exhaustion.
     import httpx
-    import time as _time
     from openai import OpenAI
-
-    generation_time = _time.time()
-
     client_kwargs = {}
     if self._api_key:
       client_kwargs["api_key"] = self._api_key
     if self._base_url:
       client_kwargs["base_url"] = self._base_url
-
     client_kwargs["http_client"] = httpx.Client(trust_env=False)
-    client = OpenAI(**client_kwargs)
+    self._client = OpenAI(**client_kwargs)
+
+  def _draw_sample(self, prompt: str) -> str:
+    """Returns a predicted continuation of `prompt`."""
+    import time as _time
+
+    generation_time = _time.time()
 
     system_msg = "You are an expert Python programmer. Complete the given function with an improved implementation."
     if self._prompt:
@@ -127,13 +127,18 @@ class OpenAILLM(LLM):
     _logger.debug('LLM REQUEST model=%s temp=%.2f max_tokens=%d', self._model, self._temperature, self._max_tokens)
     _logger.debug('LLM PROMPT:\n%s', prompt)
 
-    response = client.chat.completions.create(
+    response = self._client.chat.completions.create(
         model=self._model,
         messages=messages,
         temperature=self._temperature,
         max_tokens=self._max_tokens,
     )
     raw_response = response.choices[0].message.content
+    if not raw_response:
+      _logger.warning('LLM EMPTY RESPONSE: finish_reason=%s usage=%s choice=%s',
+                      response.choices[0].finish_reason,
+                      response.usage,
+                      response.choices[0].model_dump_json())
     _logger.debug('LLM RAW RESPONSE:\n%s', raw_response)
 
     # Strip markdown code fences if present
@@ -172,8 +177,9 @@ class OpenAILLM(LLM):
             raw = fn.body
             # Re-attach any imports that were stripped before the `def`.
             # The extracted body is indented, so imports must be indented too.
-            if stripped_imports:
-                raw = "\n".join("    " + imp for imp in stripped_imports) + "\n" + raw
+            all_imports = imports + stripped_imports
+            if all_imports:
+                raw = "\n".join("    " + imp for imp in all_imports) + "\n" + raw
             break
         except Exception:
             # If candidate starts with imports + a function definition,

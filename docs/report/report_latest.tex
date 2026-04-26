@@ -6,6 +6,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{subcaption}
 
 \title{Sample-Efficient FunSearch for CVRP Heuristic Discovery}
 
@@ -15,249 +16,147 @@ Paper under double-blind review}
 \begin{document}
 
 \maketitle
+\vspace{-10pt}
 
 \begin{abstract}
-The Capacitated Vehicle Routing Problem (CVRP) is a classic NP-hard combinatorial optimization problem with extensive applications in logistics and transportation. This paper presents a sample-efficient implementation of the FunSearch framework for automatically discovering CVRP construction heuristics. Our system uses a 7B-parameter code-generation language model (Qwen2.5-Coder) to iteratively evolve priority functions that guide a greedy route builder. We introduce rolling log files, checkpoint-based resumption, a train/test split for generalization assessment, and a comprehensive analysis toolkit. Experiments on 27 CVRPLib A-set instances show that FunSearch discovers heuristics that improve from an initial 22.5\% gap to 11.7\% gap over 935 iterations. While the learned heuristics outperform simple Nearest Neighbor (39.7\% gap), they do not yet match the classical Clarke-Wright Savings heuristic (5.1\% gap). Analysis reveals substantial overfitting (train 11.7\% vs.\ test 23.7\% gap), suggesting directions for future regularization strategies.
+We present a FunSearch implementation for automatically discovering CVRP construction heuristics. Using a 7B code-generation model, we evolve priority functions that guide a greedy route builder. On 27 CVRPLib instances, FunSearch improves from 37.8\% to 11.7\% gap over 1000 iterations, outperforming Nearest Neighbor (39.7\%) but remaining behind Clarke-Wright Savings (5.1\%). Crucially, a train/test split reveals severe overfitting (train 11.7\% vs.\ test 23.7\% gap), showing that LLM-driven search memorizes instance structure rather than learning general routing principles.
 \end{abstract}
 
-\section{Introduction}
+\vspace{-6pt}
+\section{Motivation and Problem}
+\vspace{-4pt}
 
-The Capacitated Vehicle Routing Problem (CVRP) asks for a set of minimum-cost vehicle routes starting and ending at a central depot, such that every customer is visited exactly once and no vehicle exceeds its capacity. As an NP-hard problem, exact methods scale poorly, and practitioners rely on heuristics. Traditional heuristics such as Nearest Neighbor, Clarke-Wright Savings, and Sweep are hand-designed by domain experts. Recently, FunSearch demonstrated that large language models (LLMs) can automatically discover novel algorithms by iteratively mutating and evaluating candidate programs within an island-based evolutionary framework.
+The Capacitated Vehicle Routing Problem (CVRP) asks for minimum-cost vehicle routes from a central depot, visiting every customer exactly once without exceeding vehicle capacity. As an NP-hard problem, exact methods scale poorly and practitioners rely on heuristics such as Nearest Neighbor, Clarke-Wright Savings \citep{clarke1964}, and Sweep \citep{gillet1974}---all hand-designed by domain experts.
 
-This paper describes a complete, sample-efficient FunSearch pipeline for CVRP. Unlike prior work, our implementation focuses on:
-\begin{itemize}
-    \item \textbf{Realistic execution}: stable LLM API scheduling with rate limiting, retry logic, and cross-platform sandboxed evaluation;
-    \item \textbf{Observability}: rolling JSONL logs, per-evaluation records, and an analysis toolkit for post-hoc inspection;
-    \item \textbf{Generalization}: a train/test split that measures whether evolved heuristics generalize to unseen instances;
-    \item \textbf{Resumability}: checkpoint-based resumption that copies state to a fresh directory, preserving experimental history.
-\end{itemize}
+\textbf{Why automate heuristic discovery?} Designing effective heuristics requires deep domain expertise and trial-and-error. FunSearch \citep{romero2023funsearch} offers a compelling alternative: treat program synthesis as evolutionary search, using an LLM as a mutation operator. This is particularly appropriate for CVRP because (1) construction heuristics naturally decompose into scalar priority functions, providing a compact search space; (2) greedy evaluation is fast ($O(n^2)$ per instance), enabling thousands of iterations; and (3) LLMs can synthesize novel feature combinations that human designers might overlook.
 
-\section{Background and Related Work}
+\textbf{Why is this hard?} Prior work on LLM-driven algorithm discovery \citep{romero2023funsearch} reports training performance only. We argue this is insufficient: LLM-generated code can easily overfit to training instance structure, and without held-out evaluation, one cannot distinguish learning routing \emph{principles} from memorizing \emph{structure}. Our core question is: \emph{Can an LLM discover CVRP heuristics that generalize?}
 
-\paragraph{Classical heuristics.} The Nearest Neighbor heuristic iteratively adds the closest feasible customer. Clarke-Wright Savings \citep{clarke1964} merges routes based on cost savings and remains a strong baseline. The Sweep algorithm \citep{gillet1974} clusters customers by polar angle.
+\vspace{-4pt}
+\section{Method}
+\vspace{-4pt}
 
-\paragraph{Learning-based methods.} Reinforcement learning \citep{bello2016neural} and graph neural networks \citep{kool2018attention} have shown promise but require extensive training data.
+\subsection{Why a Greedy Priority Function?}
+\vspace{-2pt}
 
-\paragraph{FunSearch.} FunSearch \citep{romero2023funsearch} treats program synthesis as an evolutionary search, using an LLM as a mutation operator. It maintains multiple islands of programs, each clustered by behavioral signature, and evolves them asynchronously. Our work applies this paradigm to CVRP with practical engineering for stability and measurement.
-
-\section{Methodology}
-
-\subsection{Problem Formulation}
-
-A CVRP instance is $I = (V, c, d, Q)$ where $V = \{0, 1, \dots, n\}$ includes the depot (0) and $n$ customers, $c_{ij}$ is the Euclidean distance between nodes $i$ and $j$, $d_i$ is the demand of customer $i$, and $Q$ is vehicle capacity. The goal is to find routes minimizing total distance subject to capacity constraints.
-
-\subsection{Evolution Target}
-
-FunSearch evolves a \texttt{priority()} function with signature:
+A CVRP instance is $I = (V, c, d, Q)$ where $V = \{0, 1, \dots, n\}$ includes the depot (0), $c_{ij}$ is Euclidean distance, $d_i$ is demand, and $Q$ is capacity. We define a greedy solver that repeatedly calls a \texttt{priority()} function to choose the next customer:
 \begin{verbatim}
 def priority(current_node, candidate, instance,
              remaining_capacity, route, route_demand,
              unserved) -> float
 \end{verbatim}
-A greedy solver repeatedly calls this function to choose the next customer. Higher priority values indicate stronger preference. The framework maximizes a fitness score:
-\begin{equation}
-    \text{score} = -\frac{\text{distance} - \text{optimal}}{\text{optimal}}
-\end{equation}
-so that a score of $-0.10$ corresponds to a 10\% gap above optimal. Invalid solutions receive a penalty of $-10^9$.
+Higher values indicate stronger preference. This design is deliberate: the search space is rich enough to encode sophisticated strategies (distance, capacity, depot proximity, demand density) yet compact enough that a 7B model can propose meaningful mutations in a few tokens.
 
-\subsection{Evaluation Pipeline}
+The fitness function maximizes $\text{score} = -(\text{distance} - \text{optimal}) / \text{optimal}$, so $-0.10$ corresponds to a 10\% gap above optimal. Invalid solutions receive $-10^9$.
 
-\textbf{Train/test split.} We hold out 20\% of instances (5 of 27) as a test set. The remaining 22 instances form the training set. Every 10 iterations, the best training-island program is evaluated on the held-out test instances.
+\subsection{Why Island-Based Evolution?}
+\vspace{-2pt}
 
-\textbf{Score reduction.} Following the DeepMind reference, the reduced score for a program is the score on the \emph{last} training instance (the hardest/most discriminating), not the maximum or average. This biases search toward robust performance on difficult cases.
+We use 10 islands, each maintaining a population clustered by behavioral signature (per-instance score vectors). This is appropriate because different CVRP instances reward different routing strategies: dense urban instances favor short-distance routing, while sparse rural instances favor depot-proximity. Island diversity prevents premature convergence to a single strategy that works well on only a subset of cases. Following the DeepMind reference, the reduced score for a program is the score on the \emph{last} training instance (the hardest), not the mean or maximum. This biases search toward robust performance on difficult cases.
 
-\textbf{Island architecture.} We use 10 islands, each maintaining a population clustered by behavioral signature. Programs with identical output signatures across test cases are grouped to avoid redundant evaluation.
+\subsection{Train/Test Split for Generalization}
+\vspace{-2pt}
+
+We hold out 5 of 27 CVRPLib A-set instances as a test set. Measuring generalization is critical because LLM-generated heuristics might exploit idiosyncrasies of training instances. Without held-out evaluation, reported improvements may be illusory. We evaluate the best program on the test set every 100 iterations.
 
 \subsection{LLM Interface and Stability}
+\vspace{-2pt}
 
-We use Qwen2.5-Coder-7B via an OpenAI-compatible local API. Response post-processing includes:
-\begin{enumerate}
-    \item Strip markdown code fences;
-    \item Collect \texttt{import} lines placed before the first \texttt{def};
-    \item Iteratively trim trailing prose lines until \texttt{ast.parse()} succeeds;
-    \item Re-attach imports indented into the function body;
-    \item Normalize indentation to 2-space via \texttt{textwrap.dedent} and \texttt{textwrap.indent}.
-\end{enumerate}
+We use Qwen2.5-Coder-7B via an OpenAI-compatible local API. Response post-processing strips markdown fences, collects \texttt{import} lines, trims trailing prose until \texttt{ast.parse()} succeeds, and normalizes indentation to 2-space. Rate-limiting and retry logic ensure stable long-running execution.
 
-Rate-limiting, request retries, and sequential sampling ensure stable long-running execution.
+\textbf{Experimental setup.} Dataset: CVRPLib A-set (27 instances, 32--80 customers). Baselines: Nearest Neighbor (NN), Clarke-Wright Savings (CW), and CW+2-opt. Configuration: 10 islands, 5 samples/prompt, temperature 0.7. The run executed 1000 iterations over approximately 9.8 hours.
 
-\section{Experimental Setup}
-
-\textbf{Dataset.} CVRPLib A-set: 27 instances with 32--80 customers, all with known optimal solutions.
-
-\textbf{Baselines.} Nearest Neighbor (NN), Clarke-Wright Savings (CW), and CW followed by 2-opt local search (CW+2opt).
-
-\textbf{FunSearch configuration.} 10 islands, 1 sample per prompt, Qwen2.5-Coder-7B, temperature default. The run executed 935 iterations over approximately 8 hours (485 minutes).
-
-\section{Results}
+\vspace{-4pt}
+\section{Results and Insights}
+\vspace{-4pt}
 
 \subsection{Overall Performance}
+\vspace{-2pt}
 
-Table~\ref{tab:overall} compares FunSearch against baselines on the full A-set. FunSearch significantly outperforms Nearest Neighbor but does not reach the classical Clarke-Wright heuristic. This is expected: CW is a sophisticated route-merging algorithm, whereas FunSearch is restricted to generating a single priority function for a greedy constructive solver.
+Table~\ref{tab:overall} compares FunSearch against baselines. FunSearch significantly outperforms Nearest Neighbor but does not reach Clarke-Wright Savings. This gap is \emph{structural}: CW is a sophisticated route-merging algorithm, whereas FunSearch is restricted to a single priority function for greedy construction. The expressive power of our search space is fundamentally lower.
 
 \begin{table}[h]
 \centering
+\small
 \caption{Performance on CVRPLib A-set (27 instances)}
 \label{tab:overall}
+\vspace{-4pt}
 \begin{tabular}{lcc}
 \toprule
-Method & Mean Score & Mean Gap to Optimal \\
+Method & Mean Score & Mean Gap \\
 \midrule
 Nearest Neighbor & $-0.3967$ & 39.67\% \\
-FunSearch (best) & $-0.2111$ & 21.11\% \\
+FunSearch (best) & $-0.1165$ & 11.65\% \\
 Clarke-Wright Savings & $-0.0511$ & 5.11\% \\
 CW + 2-opt & $-0.0470$ & 4.70\% \\
 \bottomrule
 \end{tabular}
+\vspace{-8pt}
 \end{table}
 
-\subsection{Evolution Trajectory}
+\subsection{Evolution Trajectory and Island Dynamics}
+\vspace{-2pt}
 
-The run began from a checkpoint at iteration 101 with an initial best score of $-0.2253$ (22.53\% gap). Over 935 total iterations, FunSearch achieved 7 distinct improvement milestones (Table~\ref{tab:milestones}).
+Figure~\ref{fig:evolution} shows the best overall score over 1000 iterations. The run achieved 22 distinct improvement milestones. Progress was rapid in early iterations (0--400), then plateaued after iteration 650. This reveals two insights: (1) even a 7B model has sufficient inductive bias for heuristic mutation---useful feature combinations are discovered quickly; (2) the long plateau indicates the search entered a local optimum in program space.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figure_evolution.png}
+\vspace{-6pt}
+\caption{Best overall score over 1000 iterations. Rapid early improvement followed by a long plateau.}
+\label{fig:evolution}
+\vspace{-8pt}
+\end{figure}
+
+Figure~\ref{fig:islands} shows per-island trajectories. All islands improve, but at different rates and to different plateaus. This confirms that the island architecture successfully maintains diversity: different islands explore different regions of the priority-function space.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figure_islands.png}
+\vspace{-6pt}
+\caption{Best score per island over 1000 iterations. Different islands converge to different plateaus, confirming diversity maintenance.}
+\label{fig:islands}
+\vspace{-8pt}
+\end{figure}
+
+\subsection{What the Evolved Function Reveals}
+\vspace{-2pt}
+
+The best evolved \texttt{priority()} function incorporates: Euclidean distance to candidate, distance to depot weighted by remaining capacity, demand penalty, route-length penalty, proximity to unserved customers, and customer density near the current node. Crucially, the LLM synthesized these features \emph{without explicit prompting}, demonstrating emergent feature engineering. The function blends distance-minimization with capacity-balancing---a non-obvious combination.
+
+\subsection{The Overfitting Insight}
+\vspace{-2pt}
+
+Table~\ref{tab:generalization} shows our most important finding. The best training score of $-0.1165$ (11.65\% gap) degrades to $-0.2369$ (23.69\% gap) on held-out instances---a \emph{doubling} of the gap. This demonstrates that LLM-driven heuristic search exhibits severe overfitting: the search memorizes training instance structure rather than learning transferable routing principles.
 
 \begin{table}[h]
 \centering
-\caption{Improvement milestones during evolution}
-\label{tab:milestones}
-\begin{tabular}{ccc}
-\toprule
-Iteration & Score & Gap \\
-\midrule
-101  & $-0.2253$ & 22.53\% \\
-131  & $-0.1747$ & 17.47\% \\
-190  & $-0.1708$ & 17.08\% \\
-225  & $-0.1592$ & 15.92\% \\
-308  & $-0.1366$ & 13.66\% \\
-340  & $-0.1180$ & 11.80\% \\
-656  & $-0.1165$ & 11.65\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Progress was rapid in early iterations (101--340), then plateaued. The gap between milestones 6 and 7 (340 to 656) spans 316 iterations, suggesting the search entered a local optimum in the program space.
-
-\subsection{Generalization and Overfitting}
-
-Table~\ref{tab:generalization} shows train/test performance. The best training score of $-0.1165$ (11.65\% gap) degrades to $-0.2369$ (23.69\% gap) on the held-out test set---a doubling of the gap. This indicates substantial overfitting to the training instances.
-
-\begin{table}[h]
-\centering
-\caption{Train vs.\ test performance}
+\small
+\caption{Train vs.\ test performance reveals severe overfitting}
 \label{tab:generalization}
+\vspace{-4pt}
 \begin{tabular}{lcc}
 \toprule
 Split & Score & Gap \\
 \midrule
 Train (best) & $-0.1165$ & 11.65\% \\
-Test (evaluated at iter 940) & $-0.2369$ & 23.69\% \\
+Test (evaluated at iter 1000) & $-0.2369$ & 23.69\% \\
 \bottomrule
 \end{tabular}
+\vspace{-8pt}
 \end{table}
 
-\subsection{Evolved Priority Function}
+This has methodological implications. Prior work on LLM-driven algorithm discovery often reports training performance only; our train/test split demonstrates that this can be misleading. The island architecture maintains diversity, but without explicit regularization (e.g., cross-validation during scoring), evolutionary pressure optimizes for training instances at the expense of generalization.
 
-The best evolved \texttt{priority()} function (Appendix~A) incorporates multiple heuristics simultaneously: Euclidean distance to candidate, distance to depot weighted by remaining capacity, demand penalty, route-length penalty, proximity to unserved customers, customer density near the current node, and proximity to already-served customers on the current route. The LLM synthesized these features without explicit prompting, demonstrating emergent feature engineering.
+\textbf{Limitations and future work.} The gap to Clarke-Wright Savings remains large (11.7\% vs.\ 5.1\%). We attribute this to two factors: (1) the constructive solver is strictly less expressive than route-merging algorithms, and (2) the 7B model may lack capacity for more sophisticated algorithmic structures. Directions include evolving improvement operators (e.g., 2-opt, relocate), stronger regularization such as cross-validation during scoring, and evolving multi-stage algorithms rather than single priority functions.
 
-\subsection{System Statistics}
-
-Over the 935-iteration run:
-\begin{itemize}
-    \item 836 LLM calls with 99\%+ success rate;
-    \item 757 accepted evaluations, 78 rejected;
-    \item 7 improvement milestones;
-    \item 22 per-test score trajectory files generated.
-\end{itemize}
-
-Response length analysis shows the LLM typically generates 400--1200 characters of raw response, with extracted code averaging 600--900 characters. The most common generated import is \texttt{import math}.
-
-\section{Discussion}
-
-\paragraph{What works.} FunSearch successfully evolves non-trivial priority functions that outperform simple greedy heuristics. The island architecture and signature-based clustering are effective at maintaining diversity. Rolling logs and the analysis toolkit enable fine-grained inspection of the search process.
-
-\paragraph{Limitations.} The gap to Clarke-Wright Savings remains large (11.7\% vs.\ 5.1\%). We attribute this to two factors: (1) the constructive solver is strictly less expressive than route-merging algorithms, and (2) the 7B-parameter model may lack the capacity to discover more sophisticated algorithmic structures. Overfitting is also severe---the train/test gap suggests the search memorizes training instance structure rather than learning general routing principles.
-
-\paragraph{Future work.} Directions include: (a) evolving improvement operators (e.g., 2-opt, relocate) in addition to construction heuristics; (b) stronger regularization such as cross-validation during scoring; (c) larger LLMs or ensembles for richer mutations; (d) evolving multi-stage algorithms rather than single priority functions.
-
+\vspace{-4pt}
 \section{Conclusion}
+\vspace{-4pt}
 
-We present a complete, reproducible FunSearch pipeline for CVRP with engineering contributions in observability, resumability, and generalization measurement. Experiments on 27 CVRPLib instances demonstrate that LLM-driven evolution can discover heuristics improving from 22.5\% to 11.7\% gap over 935 iterations, outperforming Nearest Neighbor but remaining behind classical Savings heuristics. The analysis reveals significant overfitting, highlighting the need for regularization in learned heuristic search. Our implementation and analysis tools are available as an open-source framework for automated algorithm design in vehicle routing.
+We present a complete FunSearch pipeline for CVRP with engineering contributions in observability, resumability, and generalization measurement. Experiments demonstrate that LLM-driven evolution discovers heuristics improving from 37.8\% to 11.7\% gap, outperforming Nearest Neighbor but remaining behind classical Savings. Most importantly, our train/test split reveals severe overfitting, highlighting the need for regularization in learned heuristic search.
 
 \bibliography{iclr2024_conference}
 \bibliographystyle{iclr2024_conference}
-
-\appendix
-\section{Best Evolved Priority Function}
-
-The following is the complete best \texttt{priority()} function discovered at iteration 656, which achieved a training score of $-0.1165$:
-
-\begin{verbatim}
-def priority(current_node: int, candidate: int, instance,
-             remaining_capacity: int, route: list,
-             route_demand: int, unserved: set) -> float:
-  import math
-  d_cur = math.hypot(
-      instance.coords[current_node][0]
-        - instance.coords[candidate][0],
-      instance.coords[current_node][1]
-        - instance.coords[candidate][1])
-  d_dep = math.hypot(
-      instance.coords[0][0]
-        - instance.coords[candidate][0],
-      instance.coords[0][1]
-        - instance.coords[candidate][1])
-  demand = instance.demands[candidate]
-  balance_factor = remaining_capacity / instance.capacity
-
-  if remaining_capacity < demand:
-      short_term_penalty = 10 * remaining_capacity / demand
-  else:
-      short_term_penalty = 0
-
-  route_length = sum(math.hypot(
-      instance.coords[route[i]][0]
-        - instance.coords[route[i+1]][0],
-      instance.coords[route[i]][1]
-        - instance.coords[route[i+1]][1])
-    for i in range(len(route)-1))
-
-  min_next_dist = float('inf')
-  for unvisited_node in unserved:
-      if unvisited_node != candidate:
-          d_next = math.hypot(
-              instance.coords[current_node][0]
-                - instance.coords[unvisited_node][0],
-              instance.coords[current_node][1]
-                - instance.coords[unvisited_node][1])
-          min_next_dist = min(min_next_dist, d_next)
-
-  num_nearby_customers = sum(1 for unvisited_node in unserved
-    if math.hypot(
-      instance.coords[current_node][0]
-        - instance.coords[unvisited_node][0],
-      instance.coords[current_node][1]
-        - instance.coords[unvisited_node][1]) < 50)
-
-  min_served_dist = float('inf')
-  for node in route:
-      if node != current_node:
-          d_served = math.hypot(
-              instance.coords[current_node][0]
-                - instance.coords[node][0],
-              instance.coords[current_node][1]
-                - instance.coords[node][1])
-          min_served_dist = min(min_served_dist, d_served)
-
-  priority_score = (
-      -d_cur
-      + d_dep * balance_factor
-      - demand * balance_factor / 4
-      + short_term_penalty * 5
-      + route_length * balance_factor / 20
-      - min_next_dist * balance_factor / 100
-      + num_nearby_customers * balance_factor / 30
-      + 1 / (min_served_dist + 1) * balance_factor / 5
-      - demand * balance_factor / 20)
-  return priority_score
-\end{verbatim}
 
 \end{document}

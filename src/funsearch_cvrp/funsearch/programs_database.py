@@ -50,9 +50,51 @@ def _softmax(logits: np.ndarray, temperature: float) -> np.ndarray:
   return result
 
 
-def _reduce_score(scores_per_test: ScoresPerTest) -> float:
-  """Reduces per-test scores into a single score."""
-  return scores_per_test[list(scores_per_test.keys())[-1]]
+@dataclasses.dataclass
+class ScoreReductionConfig:
+  """Configuration for reducing per-test scores into a single score."""
+  method: str = "percentile_25"
+  """Method to reduce scores: 'last', 'percentile_25', 'mean', 'min'."""
+  generalization_penalty: float = 0.0
+  """Weight for coefficient-of-variation penalty (0 = disabled).
+
+  A positive value penalizes programs with high variance across test
+  instances, encouraging consistency and better generalization.
+  """
+
+
+def _reduce_score(
+    scores_per_test: ScoresPerTest,
+    config: ScoreReductionConfig | None = None,
+) -> float:
+  """Reduces per-test scores into a single score.
+
+  Uses the configured aggregation method (default: 25th percentile)
+  minus an optional generalization penalty based on the coefficient
+  of variation across instances.
+  """
+  config = config or ScoreReductionConfig()
+  scores = np.array([scores_per_test[k] for k in sorted(scores_per_test.keys())])
+
+  if len(scores) == 0:
+    return -float("inf")
+
+  if config.method == "last":
+    base = scores[-1]
+  elif config.method == "percentile_25":
+    base = np.percentile(scores, 25)
+  elif config.method == "mean":
+    base = np.mean(scores)
+  elif config.method == "min":
+    base = np.min(scores)
+  else:
+    base = np.percentile(scores, 25)
+
+  if config.generalization_penalty > 0 and len(scores) > 1:
+    cv = np.std(scores) / (np.abs(np.mean(scores)) + 1e-9)
+    base -= config.generalization_penalty * cv
+
+  return float(base)
 
 
 def _get_signature(scores_per_test: ScoresPerTest, precision: int | None = None) -> Signature:
@@ -104,13 +146,18 @@ class ProgramsDatabase:
         Path(best_program_path) if best_program_path else None)
 
     # Initialize empty islands.
+    self._score_reduction_config = ScoreReductionConfig(
+        method=config.score_reduction_method,
+        generalization_penalty=config.generalization_penalty,
+    )
     self._islands: list[Island] = []
     for _ in range(config.num_islands):
       self._islands.append(
           Island(template, function_to_evolve, config.functions_per_prompt,
                  config.cluster_sampling_temperature_init,
                  config.cluster_sampling_temperature_period,
-                 config.score_bucket_precision))
+                 config.score_bucket_precision,
+                 self._score_reduction_config))
     self._best_score_per_island: list[float] = (
         [-float('inf')] * config.num_islands)
     self._best_program_per_island: list[code_manipulation.Function | None] = (
@@ -134,7 +181,7 @@ class ProgramsDatabase:
   ) -> None:
     """Registers `program` in the specified island."""
     self._islands[island_id].register_program(program, scores_per_test)
-    score = _reduce_score(scores_per_test)
+    score = _reduce_score(scores_per_test, self._score_reduction_config)
     if score > self._best_score_per_island[island_id]:
       self._best_program_per_island[island_id] = program
       self._best_scores_per_test_per_island[island_id] = scores_per_test
@@ -260,6 +307,7 @@ class Island:
       cluster_sampling_temperature_init: float,
       cluster_sampling_temperature_period: int,
       score_bucket_precision: int | None = None,
+      score_reduction_config: ScoreReductionConfig | None = None,
   ) -> None:
     self._template: code_manipulation.Program = template
     self._function_to_evolve: str = function_to_evolve
@@ -268,6 +316,7 @@ class Island:
     self._cluster_sampling_temperature_period = (
         cluster_sampling_temperature_period)
     self._score_bucket_precision = score_bucket_precision
+    self._score_reduction_config = score_reduction_config
 
     self._clusters: dict[Signature, Cluster] = {}
     self._num_programs: int = 0
@@ -280,7 +329,7 @@ class Island:
     """Stores a program on this island, in its appropriate cluster."""
     signature = _get_signature(scores_per_test, self._score_bucket_precision)
     if signature not in self._clusters:
-      score = _reduce_score(scores_per_test)
+      score = _reduce_score(scores_per_test, self._score_reduction_config)
       self._clusters[signature] = Cluster(score, program)
     else:
       self._clusters[signature].register_program(program)
@@ -288,6 +337,21 @@ class Island:
 
   def get_prompt(self) -> tuple[str, int]:
     """Constructs a prompt containing functions from this island."""
+    # If the island has no programs yet, return the template with just the
+    # function header so the LLM can generate an initial implementation.
+    if not self._clusters:
+      header = dataclasses.replace(
+          self._template.get_function(self._function_to_evolve),
+          name=f'{self._function_to_evolve}_v0',
+          body='',
+          docstring='Initial implementation.',
+      )
+      prompt = dataclasses.replace(
+          self._template,
+          functions=[header],
+      )
+      return str(prompt), 0
+
     signatures = list(self._clusters.keys())
     cluster_scores = np.array(
         [self._clusters[signature].score for signature in signatures])

@@ -105,6 +105,11 @@ class LimitedSampler(sampler.Sampler):
         evaluate_fn=None,
         test_eval_path: Path | None = None,
         test_eval_every: int = 0,
+        val_inputs: list | None = None,
+        val_sandbox=None,
+        val_eval_path: Path | None = None,
+        val_eval_every: int = 0,
+        val_gap_threshold: float = 0.05,
     ) -> None:
         super().__init__(database, evaluators, llm)
         self._max_iterations = max_iterations
@@ -121,6 +126,12 @@ class LimitedSampler(sampler.Sampler):
         self._evaluate_fn = evaluate_fn
         self._test_eval_path = test_eval_path
         self._test_eval_every = test_eval_every
+        self._val_inputs = val_inputs or []
+        self._val_sandbox = val_sandbox
+        self._val_eval_path = val_eval_path
+        self._val_eval_every = val_eval_every
+        self._val_gap_threshold = val_gap_threshold
+        self._current_gen_penalty = database._score_reduction_config.generalization_penalty
 
     @property
     def iteration(self) -> int:
@@ -210,12 +221,8 @@ class LimitedSampler(sampler.Sampler):
 
         _logger.info("Rolled evolution.log -> %s", archived_log.name)
 
-    def _evaluate_best_on_test(self) -> None:
-        """Evaluate the current best program on held-out test inputs."""
-        if not self._test_inputs or not self._test_sandbox or not self._test_eval_path:
-            return
-
-        # Find the best program overall across islands
+    def _find_best_program(self) -> tuple[Any, float] | tuple[None, None]:
+        """Find the best program and its score across all islands."""
         best = None
         best_score = -float("inf")
         for island_id in range(len(self._database._islands)):
@@ -224,7 +231,17 @@ class LimitedSampler(sampler.Sampler):
             if p is not None and s > best_score:
                 best = p
                 best_score = s
+        return best, best_score
 
+    def _evaluate_best_on_test(self) -> None:
+        """Evaluate the current best program on held-out test inputs.
+
+        This is report-only — test scores NEVER feed back into the search.
+        """
+        if not self._test_inputs or not self._test_sandbox or not self._test_eval_path:
+            return
+
+        best, best_score = self._find_best_program()
         if best is None:
             return
 
@@ -256,6 +273,101 @@ class LimitedSampler(sampler.Sampler):
                 self._iteration, best_score, test_score,
             )
 
+    def _evaluate_best_on_validation(self) -> float | None:
+        """Evaluate the current best program on validation inputs.
+
+        Returns the validation score, or None if no evaluation was performed.
+        """
+        if not self._val_inputs or not self._val_sandbox or not self._val_eval_path:
+            return None
+
+        best, best_score = self._find_best_program()
+        if best is None:
+            return None
+
+        scores_per_test = {}
+        for idx, val_input in enumerate(self._val_inputs):
+            result, runs_ok = self._val_sandbox.run(
+                str(best).strip(),
+                self._function_to_evolve,
+                self._evaluate_fn,
+                val_input,
+                30,
+            )
+            if runs_ok and result is not None:
+                scores_per_test[idx] = result
+
+        if not scores_per_test:
+            return None
+
+        # Compute a fair comparison using the same reduction method
+        # without the generalization penalty so the gap is not confounded.
+        val_config = programs_database.ScoreReductionConfig(
+            method=self._database._score_reduction_config.method,
+            generalization_penalty=0.0,
+        )
+        val_reduced = programs_database._reduce_score(scores_per_test, val_config)
+
+        # Also compute a clean train score for the same island.
+        train_clean = best_score
+        if self._current_gen_penalty > 0:
+            train_config = programs_database.ScoreReductionConfig(
+                method=self._database._score_reduction_config.method,
+                generalization_penalty=0.0,
+            )
+            # Find the island that holds the best program to retrieve its raw scores.
+            best_island = None
+            for i in range(len(self._database._islands)):
+                if self._database._best_program_per_island[i] is best:
+                    best_island = i
+                    break
+            if best_island is not None:
+                raw_scores = self._database._best_scores_per_test_per_island[best_island]
+                if raw_scores:
+                    train_clean = programs_database._reduce_score(raw_scores, train_config)
+
+        gap = train_clean - val_reduced
+        record = {
+            "iteration": self._iteration,
+            "train_best": best_score,
+            "train_clean": train_clean,
+            "val_score": val_reduced,
+            "gap": gap,
+            "scores_per_test": scores_per_test,
+            "gen_penalty": self._current_gen_penalty,
+            "timestamp": time.time(),
+        }
+        with open(self._val_eval_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+
+        # Feedback loop: adjust generalization penalty based on validation gap.
+        # If the model overfits (large gap), increase penalty.
+        # If it generalizes well (small gap), gradually decrease penalty.
+        prev_penalty = self._current_gen_penalty
+        if gap > self._val_gap_threshold:
+            self._current_gen_penalty = min(1.0, self._current_gen_penalty * 1.3 + 0.01)
+        elif gap < self._val_gap_threshold * 0.3:
+            self._current_gen_penalty = max(0.0, self._current_gen_penalty * 0.9)
+
+        if abs(self._current_gen_penalty - prev_penalty) > 1e-6:
+            self._database._score_reduction_config.generalization_penalty = (
+                self._current_gen_penalty
+            )
+            _logger.warning(
+                "VAL FEEDBACK iter=%d train=%.4f val=%.4f gap=%.4f "
+                "gen_penalty %.4f -> %.4f",
+                self._iteration, train_clean, val_reduced, gap,
+                prev_penalty, self._current_gen_penalty,
+            )
+        else:
+            _logger.info(
+                "VAL EVAL iter=%d train=%.4f val=%.4f gap=%.4f penalty=%.4f",
+                self._iteration, train_clean, val_reduced, gap,
+                self._current_gen_penalty,
+            )
+
+        return val_reduced
+
     def sample(self) -> None:
         while self._iteration < self._max_iterations:
             generation_time = time.time()
@@ -276,6 +388,9 @@ class LimitedSampler(sampler.Sampler):
 
                 if self._test_eval_every > 0 and self._iteration % self._test_eval_every == 0:
                     self._evaluate_best_on_test()
+
+                if self._val_eval_every > 0 and self._iteration % self._val_eval_every == 0:
+                    self._evaluate_best_on_validation()
 
                 if self._checkpoint_every > 0 and self._checkpoint_path:
                     if self._iteration % self._checkpoint_every == 0:
@@ -573,6 +688,8 @@ def build_config(args: argparse.Namespace) -> config_lib.Config:
         functions_per_prompt=args.functions_per_prompt,
         reset_period=args.reset_period,
         score_bucket_precision=2,  # bucket gap scores to 2 decimal places
+        score_reduction_method=args.score_reduction,
+        generalization_penalty=args.generalization_penalty,
     )
 
     if args.mock_llm:
@@ -708,6 +825,30 @@ def main() -> None:
         help="Evaluate best program on test set every N iterations (default: 10)",
     )
     parser.add_argument(
+        "--val-split",
+        type=float,
+        default=0.0,
+        help="Fraction of training instances to hold out for validation feedback (default: 0.0)",
+    )
+    parser.add_argument(
+        "--val-eval-every",
+        type=int,
+        default=10,
+        help="Evaluate best program on validation set every N iterations (default: 10)",
+    )
+    parser.add_argument(
+        "--score-reduction",
+        default="percentile_25",
+        choices=["last", "percentile_25", "mean", "min"],
+        help="Score reduction method (default: percentile_25)",
+    )
+    parser.add_argument(
+        "--generalization-penalty",
+        type=float,
+        default=0.0,
+        help="Initial coefficient-of-variation penalty weight (default: 0.0)",
+    )
+    parser.add_argument(
         "--spec",
         default="priority",
         choices=["priority", "savings"],
@@ -753,6 +894,21 @@ def main() -> None:
         _logger.info(
             "Train/test split: %d train, %d test (%.0f%% held out)",
             len(train_inputs), len(test_inputs), args.test_split * 100,
+        )
+
+    # Further split train into train / validation for feedback loop
+    val_inputs = []
+    if args.val_split > 0 and len(train_inputs) > 1:
+        import random
+        random.seed(43)  # different seed from test split
+        shuffled_train = list(train_inputs)
+        random.shuffle(shuffled_train)
+        n_val = max(1, int(len(shuffled_train) * args.val_split))
+        val_inputs = shuffled_train[:n_val]
+        train_inputs = shuffled_train[n_val:]
+        _logger.info(
+            "Train/val split: %d train, %d val (%.0f%% held out)",
+            len(train_inputs), len(val_inputs), args.val_split * 100,
         )
 
     # Build config
@@ -835,6 +991,9 @@ def main() -> None:
     _test_dir = output_dir / "test"
     _test_dir.mkdir(parents=True, exist_ok=True)
     test_eval_path = _test_dir / "test_eval.jsonl"
+    _val_dir = output_dir / "val"
+    _val_dir.mkdir(parents=True, exist_ok=True)
+    val_eval_path = _val_dir / "val_eval.jsonl"
 
     # Set up named logger with file + console handlers
     _logger.setLevel(logging.DEBUG)
@@ -939,6 +1098,11 @@ def main() -> None:
         evaluate_fn=evaluate_fn,
         test_eval_path=test_eval_path,
         test_eval_every=args.test_eval_every,
+        val_inputs=val_inputs,
+        val_sandbox=sandbox,
+        val_eval_path=val_eval_path,
+        val_eval_every=args.val_eval_every,
+        val_gap_threshold=0.05,
     )
 
     _logger.info("Starting FunSearch...")
@@ -953,8 +1117,11 @@ def main() -> None:
         metadata={"completed_iterations": limited_sampler.iteration},
     )
 
-    # Final test evaluation
+    # Final test evaluation (report-only, no feedback)
     limited_sampler._evaluate_best_on_test()
+
+    # Final validation evaluation
+    limited_sampler._evaluate_best_on_validation()
 
     # Save results
     save_funsearch_results(

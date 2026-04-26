@@ -246,10 +246,11 @@ class Evaluator:
       return None
 
     if scores_per_test:
-      # Use the last test instance as the reduced score, matching
-      # programs_database._reduce_score — the last test is the
-      # hardest / most discriminating instance.
-      score = scores_per_test[list(scores_per_test.keys())[-1]]
+      # Compute reduced score using the configured method (e.g. percentile_25
+      # with generalization penalty) so milestone detection matches the
+      # database's ranking.
+      score = programs_database._reduce_score(
+          scores_per_test, self._database._score_reduction_config)
       signature = tuple(round(scores_per_test[k], 2) for k in sorted(scores_per_test.keys()))
       _logger.debug('[island=%s] ACCEPTED score=%.4f sig=%s\n%s', island_id, score, signature, new_function.body)
 
