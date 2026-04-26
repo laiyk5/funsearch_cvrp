@@ -7,6 +7,7 @@ Usage:
     python scripts/analyze/analyze.py programs [dir]           # extract & compare programs
     python scripts/analyze/analyze.py llm [dir]                # LLM behavior analysis
     python scripts/analyze/analyze.py summary [dir]            # one-page dashboard
+    python scripts/analyze/analyze.py validation [dir]         # train/val/test plots
 
 All outputs are written to ``<experiment>/analysis/<subcommand>/``.
 """
@@ -39,6 +40,9 @@ from scripts.analyze.lib.data import (
     load_eval_log,
     load_sampler_log,
     load_meta,
+    load_val_log,
+    load_val_per_island_log,
+    load_test_log,
 )
 
 
@@ -667,6 +671,116 @@ def cmd_summary(args: argparse.Namespace) -> None:
 
 
 # ===========================================================================
+# Subcommand: validation
+# ===========================================================================
+
+
+def cmd_validation(args: argparse.Namespace) -> None:
+    exp_dir = resolve_experiment(args.experiment)
+    out_dir = _out_dir(exp_dir, "validation")
+    print(f"Experiment: {exp_dir}")
+
+    val_records = load_val_log(exp_dir, full_history=args.full_history)
+    test_records = load_test_log(exp_dir, full_history=args.full_history)
+    val_per_island = load_val_per_island_log(exp_dir, full_history=args.full_history)
+
+    if not val_records and not test_records:
+        print("  No validation or test data found.")
+        print("  Run with --val-split and --test-split to generate data.")
+        return
+
+    # --- Plot 1: Train / Val / Test scores over time ---
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    if val_records:
+        its = [r["iteration"] for r in val_records]
+        train_scores = [r.get("train_clean", r.get("train_best")) for r in val_records]
+        val_scores = [r["val_score"] for r in val_records]
+        ax.plot(its, train_scores, "b-", linewidth=1.5, label="Train (clean)", alpha=0.8)
+        ax.plot(its, val_scores, "g-", linewidth=1.5, label="Validation", alpha=0.8)
+
+        # Gap shading
+        gaps = [t - v for t, v in zip(train_scores, val_scores)]
+        ax.fill_between(its, val_scores, train_scores, alpha=0.15, color="red",
+                        label="Generalization gap")
+
+    if test_records:
+        its_test = [r["iteration"] for r in test_records]
+        test_scores = [r["test_score"] for r in test_records]
+        ax.plot(its_test, test_scores, "r-", linewidth=1.5, label="Test", alpha=0.8)
+
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Score (negative gap)")
+    ax.set_title("Train / Validation / Test Scores Over Time")
+    ax.legend(loc="lower right")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fpath = out_dir / "train_val_test.png"
+    fig.savefig(fpath, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  train/val/test -> {fpath.name}")
+
+    # --- Plot 2: Generalization gap and penalty ---
+    if val_records:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+        its = [r["iteration"] for r in val_records]
+        gaps = [r.get("gap", 0) for r in val_records]
+        penalties = [r.get("gen_penalty", 0) for r in val_records]
+
+        ax1.plot(its, gaps, "r-", linewidth=1.5)
+        ax1.axhline(0, color="black", linestyle="--", alpha=0.3)
+        ax1.set_ylabel("Gap (train - val)")
+        ax1.set_title("Generalization Gap Over Time")
+        ax1.grid(True, alpha=0.3)
+
+        ax2.plot(its, penalties, "purple", linewidth=1.5)
+        ax2.set_xlabel("Iteration")
+        ax2.set_ylabel("Penalty")
+        ax2.set_title("Generalization Penalty Over Time")
+        ax2.grid(True, alpha=0.3)
+
+        fig.tight_layout()
+        fpath = out_dir / "gap_and_penalty.png"
+        fig.savefig(fpath, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"  gap/penalty    -> {fpath.name}")
+
+    # --- Plot 3: Per-island validation scores ---
+    if val_per_island:
+        fig, ax = plt.subplots(figsize=(14, 6))
+
+        island_ids = sorted({r["island_id"] for r in val_per_island})
+        cmap = plt.get_cmap("tab10" if len(island_ids) <= 10 else "tab20")
+
+        for idx, island_id in enumerate(island_ids):
+            sub = [r for r in val_per_island if r["island_id"] == island_id]
+            sub.sort(key=lambda r: r["iteration"])
+            its = [r["iteration"] for r in sub]
+            val_scores = [r["val_score"] for r in sub]
+            train_scores = [r.get("train_clean", r.get("train_score")) for r in sub]
+            color = cmap(idx % cmap.N)
+
+            ax.plot(its, val_scores, "-", linewidth=1.0, alpha=0.8,
+                    color=color, label=f"I{island_id} val")
+            ax.plot(its, train_scores, "--", linewidth=0.8, alpha=0.5,
+                    color=color)
+
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Score")
+        ax.set_title("Per-Island Train (dashed) vs Validation (solid)")
+        ax.legend(loc="lower right", ncol=5, fontsize=7)
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fpath = out_dir / "per_island_val.png"
+        fig.savefig(fpath, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"  per-island     -> {fpath.name}")
+
+    print(f"Done -> {out_dir}/")
+
+
+# ===========================================================================
 # Main
 # ===========================================================================
 
@@ -715,6 +829,13 @@ def main() -> None:
     p_sum.add_argument("--full-history", action="store_true",
                        help="Follow resumed_from chain in meta.json")
 
+    # validation
+    p_val = sub.add_parser("validation", help="Validation and test score plots")
+    p_val.add_argument("experiment", nargs="?", default=None,
+                       help="Experiment dir or run_funsearch/ path")
+    p_val.add_argument("--full-history", action="store_true",
+                       help="Follow resumed_from chain in meta.json")
+
     args = parser.parse_args()
 
     dispatch = {
@@ -724,6 +845,7 @@ def main() -> None:
         "llm": cmd_llm,
         "tokens": cmd_tokens,
         "summary": cmd_summary,
+        "validation": cmd_validation,
     }
     dispatch[args.command](args)
 

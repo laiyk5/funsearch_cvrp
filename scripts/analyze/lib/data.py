@@ -156,6 +156,36 @@ def load_sampler_log(exp_dir: Path | None = None, *, full_history: bool = False)
     return _load_rolling("sampler", "sampler", exp_dir)
 
 
+def load_val_log(exp_dir: Path | None = None, *, full_history: bool = False) -> list[dict]:
+    """Load validation evaluation records (overall best on val set)."""
+    if full_history:
+        records: list[dict] = []
+        for d in resolve_history(exp_dir):
+            records.extend(_load_rolling("val", "val_eval", d))
+        return records
+    return _load_rolling("val", "val_eval", exp_dir)
+
+
+def load_val_per_island_log(exp_dir: Path | None = None, *, full_history: bool = False) -> list[dict]:
+    """Load per-island validation records."""
+    if full_history:
+        records: list[dict] = []
+        for d in resolve_history(exp_dir):
+            records.extend(_load_rolling("val", "val_per_island", d))
+        return records
+    return _load_rolling("val", "val_per_island", exp_dir)
+
+
+def load_test_log(exp_dir: Path | None = None, *, full_history: bool = False) -> list[dict]:
+    """Load test evaluation records (overall best on test set)."""
+    if full_history:
+        records: list[dict] = []
+        for d in resolve_history(exp_dir):
+            records.extend(_load_rolling("test", "test_eval", d))
+        return records
+    return _load_rolling("test", "test_eval", exp_dir)
+
+
 # ---------------------------------------------------------------------------
 # Convenience
 # ---------------------------------------------------------------------------
