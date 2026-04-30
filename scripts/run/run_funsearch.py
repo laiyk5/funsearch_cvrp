@@ -1327,7 +1327,12 @@ def main() -> None:
                         mlflow.log_artifact(str(f), artifact_path=subdir)
             mlflow.log_metric("duration_seconds", duration)
             mlflow.log_metric("total_llm_calls", limited_sampler._iteration)
-            mlflow.log_metric("final_best_score", database._best_score if database._best_score != -float("inf") else None)
+            final_best = max(
+                (s for s in database._best_score_per_island if s != -float("inf")),
+                default=None,
+            )
+            if final_best is not None:
+                mlflow.log_metric("final_best_score", final_best)
         except Exception as e:
             _logger.warning("MLflow artifact logging failed: %s", e)
         finally:
