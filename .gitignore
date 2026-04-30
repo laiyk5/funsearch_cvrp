@@ -63,6 +63,11 @@ outputs/**/generated_*/
 
 .env
 
+# MLflow
+mlruns/
+mlflow.db
+mlartifacts/
+
 # Latex build files
 
 *.pdf

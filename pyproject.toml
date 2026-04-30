@@ -23,7 +23,8 @@ authors = [
 ]
 classifiers = ["Private :: Do Not Upload"]
 
-# [project.optional-dependencies]
+[project.optional-dependencies]
+mlflow = ["mlflow>=2.15.0"]
 
 [project.urls]
 Homepage = "https://github.com/laiyk5/funsearch_cvrp"

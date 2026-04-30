@@ -28,6 +28,14 @@ from funsearch_cvrp.utils.output_manager import (
     is_git_dirty,
 )
 
+# Optional MLflow integration
+try:
+    import mlflow
+    _HAS_MLFLOW = True
+except ImportError:
+    _HAS_MLFLOW = False
+    mlflow = None
+
 _logger = logging.getLogger('funsearch')
 
 
@@ -158,6 +166,24 @@ class LimitedSampler(sampler.Sampler):
         with open(self._database_log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
 
+    def _log_mlflow_metrics(self) -> None:
+        """Log current metrics to MLflow if available."""
+        if not _HAS_MLFLOW or mlflow is None:
+            return
+        try:
+            overall_best = max(
+                (s for s in self._database._best_score_per_island if s != -float("inf")),
+                default=None,
+            )
+            if overall_best is not None:
+                mlflow.log_metric("overall_best", overall_best, step=self._iteration)
+            for island_id, score in enumerate(self._database._best_score_per_island):
+                if score != -float("inf"):
+                    mlflow.log_metric(f"best_score_island_{island_id}", score, step=self._iteration)
+            mlflow.log_metric("gen_penalty", self._current_gen_penalty, step=self._iteration)
+        except Exception:
+            pass
+
     def _maybe_roll_log(self) -> None:
         """Archive evolution.log and eval_history every N iterations."""
         if not self._log_roll_every or not self._log_dir:
@@ -284,6 +310,12 @@ class LimitedSampler(sampler.Sampler):
                 "TEST EVAL iter=%d train=%.4f test=%.4f",
                 self._iteration, best_score, test_score,
             )
+            if _HAS_MLFLOW and mlflow is not None:
+                try:
+                    mlflow.log_metric("test_score", test_score, step=self._iteration)
+                    mlflow.log_metric("test_train_gap", best_score - test_score, step=self._iteration)
+                except Exception:
+                    pass
 
     def _evaluate_best_on_validation(self) -> float | None:
         """Evaluate the current best program on validation inputs.
@@ -376,6 +408,13 @@ class LimitedSampler(sampler.Sampler):
                         self._current_gen_penalty,
                     )
 
+            if _HAS_MLFLOW and mlflow is not None and overall_val_reduced is not None:
+                try:
+                    mlflow.log_metric("val_score", overall_val_reduced, step=self._iteration)
+                    mlflow.log_metric("val_gap", train_clean - overall_val_reduced, step=self._iteration)
+                except Exception:
+                    pass
+
         # ------------------------------------------------------------------
         # 2. Per-island validation (for monitoring)
         # ------------------------------------------------------------------
@@ -455,6 +494,7 @@ class LimitedSampler(sampler.Sampler):
                 )
                 self._iteration += 1
                 self._log_database()
+                self._log_mlflow_metrics()
                 self._maybe_roll_log()
 
                 if self._test_eval_every > 0 and self._iteration % self._test_eval_every == 0:
@@ -925,8 +965,38 @@ def main() -> None:
         choices=["priority", "savings"],
         help="Specification to evolve: priority (greedy) or savings (Clarke-Wright style) (default: priority)",
     )
+    parser.add_argument(
+        "--mlflow-tracking-uri",
+        default=None,
+        help="MLflow tracking URI (default: local ./mlruns)",
+    )
+    parser.add_argument(
+        "--mlflow-experiment-name",
+        default="funsearch_cvrp",
+        help="MLflow experiment name (default: funsearch_cvrp)",
+    )
+    parser.add_argument(
+        "--no-mlflow",
+        action="store_true",
+        help="Disable MLflow logging even if mlflow is installed",
+    )
 
     args = parser.parse_args()
+
+    # ------------------------------------------------------------------
+    # MLflow setup (optional)
+    # ------------------------------------------------------------------
+    use_mlflow = _HAS_MLFLOW and not args.no_mlflow
+    if use_mlflow:
+        try:
+            if args.mlflow_tracking_uri:
+                mlflow.set_tracking_uri(args.mlflow_tracking_uri)
+            mlflow.set_experiment(args.mlflow_experiment_name)
+            mlflow.start_run()
+            _logger.info("MLflow tracking started: experiment=%s run_id=%s", args.mlflow_experiment_name, mlflow.active_run().info.run_id)
+        except Exception as e:
+            _logger.warning("MLflow initialization failed: %s", e)
+            use_mlflow = False
 
     # Import the specification module dynamically
     if args.spec == "savings":
@@ -984,6 +1054,36 @@ def main() -> None:
 
     # Build config
     config = build_config(args)
+
+    # Log parameters to MLflow
+    if use_mlflow:
+        try:
+            mlflow.log_params({
+                "iterations": args.iterations,
+                "mock_llm": args.mock_llm,
+                "model": config.llm.model if config.llm else "mock",
+                "temperature": config.llm.temperature if config.llm else 0.0,
+                "max_tokens": config.llm.max_tokens if config.llm else 0,
+                "num_islands": args.num_islands,
+                "functions_per_prompt": args.functions_per_prompt,
+                "reset_period": args.reset_period,
+                "samples_per_prompt": args.samples_per_prompt,
+                "num_evaluators": args.num_evaluators,
+                "score_reduction": args.score_reduction,
+                "generalization_penalty": args.generalization_penalty,
+                "spec": args.spec,
+                "test_split": args.test_split,
+                "val_split": args.val_split,
+                "dataset_folder": args.dataset_folder or project_config.get("CVRP", "dataset_folder", fallback="data/cvrplib/A"),
+                "limit_instances": args.limit_instances or "all",
+            })
+            mlflow.set_tags({
+                "git_commit": get_git_commit_hash(short=False),
+                "git_dirty": is_git_dirty(),
+                "spec_type": args.spec,
+            })
+        except Exception as e:
+            _logger.warning("MLflow param logging failed: %s", e)
 
     # Determine output directory.  When resuming without an explicit output-dir,
     # create a fresh directory and copy the checkpoint so the original run stays
@@ -1207,6 +1307,34 @@ def main() -> None:
     )
 
     _logger.info(f"All done. Output directory: {output_dir}")
+
+    # Log artifacts and end MLflow run
+    if use_mlflow:
+        try:
+            artifact_files = [
+                output_dir / "best_program.py",
+                output_dir / "funsearch_results.json",
+                output_dir / "checkpoint.pkl",
+            ]
+            for f in artifact_files:
+                if f.exists():
+                    mlflow.log_artifact(str(f))
+            # Log eval/dirs as artifacts if they exist
+            for subdir in ["eval", "database", "sampler", "test", "val"]:
+                subpath = output_dir / subdir
+                if subpath.exists():
+                    for f in subpath.glob("*.jsonl"):
+                        mlflow.log_artifact(str(f), artifact_path=subdir)
+            mlflow.log_metric("duration_seconds", duration)
+            mlflow.log_metric("total_llm_calls", limited_sampler._iteration)
+            mlflow.log_metric("final_best_score", database._best_score if database._best_score != -float("inf") else None)
+        except Exception as e:
+            _logger.warning("MLflow artifact logging failed: %s", e)
+        finally:
+            try:
+                mlflow.end_run()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
